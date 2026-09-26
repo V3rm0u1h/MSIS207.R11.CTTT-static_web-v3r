@@ -214,3 +214,55 @@ section {
     padding-inline: var(--space-5);
     background: var(--color-surface);
 }
+
+/* T-03C — Empty & Error States */
+
+.state-panel[hidden] {
+  display: none;
+}
+
+.state-panel {
+  display: block;
+  margin-block-start: var(--space-4);
+  padding: var(--space-5);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-background);
+}
+
+.state-panel p {
+  margin-block-start: var(--space-2);
+}
+
+.state-panel--empty {
+  border-style: dashed;
+}
+
+.state-panel--error {
+  border-width: 2px;
+}
+
+.state-action {
+  margin-block-start: var(--space-4);
+  padding: var(--space-2) var(--space-3);
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.state-action:hover {
+  border-color: var(--color-accent);
+}
+
+.state-action:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 3px;
+}
+
+@media (max-width: 30rem) {
+  .state-panel {
+    padding: var(--space-3);
+  }
+}

@@ -1,66 +1,80 @@
-"use strict";
+/* T-02C — Theme Engine */
 
-const THEME_KEY = "theme";
-
-const VALID_THEMES = new Set(["light", "dark"]);
-
-const DEFAULT_THEME = "light";
-
-const root = document.documentElement;
-
-const themeToggle = document.getElementById("theme-toggle");
-
-function isValidTheme(theme) {
-    return VALID_THEMES.has(theme);
-}
-
-function getStoredTheme() {
-    try {
-        const storedTheme = localStorage.getItem(THEME_KEY);
-
-        return isValidTheme(storedTheme)
-            ? storedTheme
-            : DEFAULT_THEME;
-    } catch {
-        return DEFAULT_THEME;
-    }
-}
+const themeToggle = document.querySelector("#theme-toggle");
 
 function applyTheme(theme) {
-    root.dataset.theme = theme;
+  document.documentElement.dataset.theme = theme;
 
-    const isDark = theme === "dark";
+  const isDark = theme === "dark";
 
-    themeToggle.setAttribute("aria-pressed", String(isDark));
-
-    themeToggle.setAttribute(
-        "aria-label",
-        isDark ? "Switch to light theme" : "Switch to dark theme"
-    );
-
-    themeToggle.textContent = isDark ? "Light mode" : "Dark mode";
+  themeToggle.setAttribute("aria-pressed", String(isDark));
+  themeToggle.setAttribute(
+    "aria-label",
+    isDark ? "Switch to light theme" : "Switch to dark theme"
+  );
+  themeToggle.textContent = isDark ? "Light mode" : "Dark mode";
 }
 
-function saveTheme(theme) {
-    try {
-        localStorage.setItem(THEME_KEY, theme);
-    } catch {
-        // Theme remains functional even when storage is unavailable.
+const savedTheme = localStorage.getItem("theme");
+
+if (savedTheme === "dark" || savedTheme === "light") {
+  applyTheme(savedTheme);
+} else {
+  applyTheme("light");
+}
+
+themeToggle.addEventListener("click", () => {
+  const currentTheme = document.documentElement.dataset.theme;
+  const nextTheme = currentTheme === "dark" ? "light" : "dark";
+
+  localStorage.setItem("theme", nextTheme);
+  applyTheme(nextTheme);
+});
+
+
+/* T-03C — Empty & Error States */
+
+const projectStates = {
+  loading: document.querySelector("#projects-loading"),
+  live: document.querySelector("#projects-live"),
+  empty: document.querySelector("#projects-empty"),
+  error: document.querySelector("#projects-error")
+};
+
+let currentProjectState = "loading";
+
+function setProjectState(nextState) {
+  const currentState = currentProjectState;
+
+  const allowedTransitions = {
+    loading: ["live", "error"],
+    live: ["empty", "error"],
+    empty: ["loading"],
+    error: ["loading"]
+  };
+
+  if (!allowedTransitions[currentState].includes(nextState)) {
+    return;
+  }
+
+  Object.values(projectStates).forEach((statePanel) => {
+    statePanel.hidden = true;
+  });
+
+  projectStates[nextState].hidden = false;
+  currentProjectState = nextState;
+}
+
+document.querySelectorAll("[data-retry]").forEach((button) => {
+  button.addEventListener("click", () => {
+    if (currentProjectState === "empty" ||
+        currentProjectState === "error") {
+      setProjectState("loading");
     }
-}
+  });
+});
 
-function toggleTheme() {
-    const currentTheme = root.dataset.theme;
 
-    const nextTheme =
-        currentTheme === "dark"
-            ? "light"
-            : "dark";
+/* T-03C demo controls */
 
-    applyTheme(nextTheme);
-    saveTheme(nextTheme);
-}
-
-applyTheme(getStoredTheme());
-
-themeToggle.addEventListener("click", toggleTheme);
+setProjectState("live");
