@@ -26,7 +26,7 @@ t-02c
 
 ### t-02a — Tokens and Reset
 
-**Status:** Ready for review
+**Status:** Complete
 
 **Scope**
 - Create the CSS design-token layer.
@@ -44,20 +44,6 @@ t-02c
 - No theme switching.
 - No theme toggle.
 
-**Acceptance Criteria**
-- `style.css` exists and is linked from `index.html`.
-- CSS colors are defined through custom properties.
-- CSS rules consume color tokens through `var(...)`.
-- Global box sizing is normalized.
-- Body margin is reset.
-- Media elements are constrained to available width.
-- Form controls inherit the document font.
-- Heading/list defaults are intentionally normalized.
-- Keyboard focus remains visible.
-- Skip-link behavior remains intact.
-- Zero `<div>` elements remain.
-- No JavaScript is introduced.
-
 **Commit**
 ```bash
 git add index.html style.css TASK_DECOMPOSITION.md
@@ -68,23 +54,22 @@ git commit -m "feat(css): tokens & reset"
 
 **Dependency:** `t-02a`
 
+**Status:** Complete
+
 **Scope**
 - Add CSS Grid as the primary portfolio layout mechanism.
-- Create a two-column desktop layout for the About and Projects sections.
-- Use grid rows through grid-auto-rows.
-- Collapse the layout to a single column at smaller viewport widths.
-- Preserve the existing DOM reading order.
-- Preserve keyboard navigation, focus states, and skip-link behavior.
+- Create a two-column desktop layout.
+- Use grid rows and columns.
+- Collapse to a single column on smaller screens.
+- Preserve DOM reading order.
+- Preserve keyboard navigation and focus states.
 - Keep this milestone CSS-only.
 
-Responsive Behavior
-
-- Desktop uses two flexible columns with minmax(0, 1fr).
-- Grid rows use minmax(...) to provide stable section sizing.
-- Mobile uses a single flexible column.
-- The layout does not rely on fixed pixel widths or JavaScript calculations.
-- Content can shrink within grid tracks without introducing horizontal overflow.
-
+**Boundary**
+- No JavaScript.
+- No localStorage.
+- No theme switching.
+- No theme toggle.
 
 **Commit**
 ```bash
@@ -96,7 +81,57 @@ git commit -m "feat(css): responsive grid"
 
 **Dependency:** `t-02b`
 
-Reserved for the final milestone.
+**Status:** Ready for review
+
+**Scope**
+- Add a light/dark theme token system.
+- Add an accessible semantic theme toggle button.
+- Persist theme state with `localStorage`.
+- Use exactly `theme` as the storage key.
+- Accept only `light` and `dark` as persisted values.
+- Apply themes through CSS custom properties.
+- Preserve the semantic HTML and responsive Grid architecture.
+- Maintain keyboard accessibility and visible focus states.
+- Handle unavailable or invalid localStorage data safely.
+
+**Theme Contract**
+- Default theme: `light`.
+- Valid themes: `light`, `dark`.
+- Storage key: `theme`.
+- Theme state is represented by `data-theme` on `<html>`.
+- The toggle exposes its state through `aria-pressed`.
+- The toggle is a native `<button>` and therefore supports normal keyboard activation.
+
+**Accessibility**
+- Toggle is reachable through normal Tab navigation.
+- Enter/Space activates the native button.
+- Accessible label communicates the available theme action.
+- Focus styling remains visible.
+- Light-theme normal text uses accessible token combinations.
+- Dark-theme normal text uses accessible token combinations.
+
+**Boundary**
+- No external UI framework.
+- No unnecessary dependencies.
+- No DOM reconstruction.
+- No JavaScript layout calculations.
+- No separate hardcoded component color system.
+
+**Acceptance Criteria**
+- Theme toggle exists.
+- Toggle is keyboard accessible.
+- Light theme works.
+- Dark theme works.
+- Theme state persists under localStorage key `theme`.
+- Invalid stored themes safely fall back to light.
+- Storage failures do not break theme switching.
+- Repeated light/dark toggling produces no application errors.
+- Theme switching updates CSS tokens rather than rebuilding the page.
+- Zero `<div>` elements remain.
+- Responsive Grid remains intact.
+- Skip-link behavior remains intact.
+- Visible focus states remain intact.
+- Both themes provide sufficient normal-text contrast.
 
 **Commit**
 ```bash

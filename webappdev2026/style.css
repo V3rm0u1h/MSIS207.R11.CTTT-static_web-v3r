@@ -197,3 +197,33 @@ section {
     padding-inline: var(–space-4);
   }
 }
+
+/* T-02C — Theme Engine */
+
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(–space-4);
+}
+
+.theme-toggle {
+  flex: 0 0 auto;
+  padding: var(–space-2) var(–space-3);
+  border: 2px solid var(–color-border);
+  border-radius: var(–radius-sm);
+  background: var(–color-surface);
+  color: var(–color-text);
+  cursor: pointer;
+}
+
+.theme-toggle:hover {
+  border-color: var(–color-accent);
+}
+
+@media (max-width: 30rem) {
+  header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
