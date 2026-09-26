@@ -68,7 +68,23 @@ git commit -m "feat(css): tokens & reset"
 
 **Dependency:** `t-02a`
 
-Reserved for the next milestone.
+**Scope**
+- Add CSS Grid as the primary portfolio layout mechanism.
+- Create a two-column desktop layout for the About and Projects sections.
+- Use grid rows through grid-auto-rows.
+- Collapse the layout to a single column at smaller viewport widths.
+- Preserve the existing DOM reading order.
+- Preserve keyboard navigation, focus states, and skip-link behavior.
+- Keep this milestone CSS-only.
+
+Responsive Behavior
+
+- Desktop uses two flexible columns with minmax(0, 1fr).
+- Grid rows use minmax(...) to provide stable section sizing.
+- Mobile uses a single flexible column.
+- The layout does not rely on fixed pixel widths or JavaScript calculations.
+- Content can shrink within grid tracks without introducing horizontal overflow.
+
 
 **Commit**
 ```bash
