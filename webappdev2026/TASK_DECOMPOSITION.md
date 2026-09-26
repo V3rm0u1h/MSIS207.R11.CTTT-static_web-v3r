@@ -1,55 +1,89 @@
 # Task Decomposition
 
-## t-01 — Semantic DOM architecture & A11y contract
+## Exercise 1
 
-### Scope
+### t-01 — Semantic DOM architecture & A11y contract
 
-- Define the semantic landmark hierarchy.
-- Implement the page with zero `<div>` elements.
-- Implement an accessible skip link targeting `#main-content`.
-- Implement the required `header`, `nav`, `main`, and `section` landmarks.
-- Implement the required heading hierarchy.
-- Implement accessible navigation using `<nav>`, `<ul>`, `<li>`, and `<a>`.
-- Verify the semantic structure and accessibility tree using Chrome DevTools.
-- Keep this milestone HTML-only.
-- Create an atomic Git commit containing only this milestone.
+- Semantic landmark hierarchy
+- Zero `<div>` elements
+- Accessible skip link
+- Basic accessibility verification
+- Atomic HTML-only Git commit
 
-### Acceptance Criteria
+## Exercise 2 — Enterprise Developer Portfolio
 
-- `index.html` exists.
-- Exactly one `<header>` exists.
-- Exactly one `<nav>` exists.
-- Exactly one `<main>` exists.
-- Exactly two content sections exist: `#about` and `#projects`.
-- Exactly one primary `<h1>` exists.
-- Each section has an `<h2>`.
-- Navigation has the accessible name `Primary`.
-- `About` links to `#about`.
-- `Projects` links to `#projects`.
-- Skip link links to `#main-content`.
-- `<main>` has `id="main-content"`.
-- Zero `<div>` elements exist.
-- No CSS or JavaScript is introduced.
-
-### Verification
-
-Run:
-
-```bash
-git status
-git diff
-```
-
-Expected milestone files:
+### Dependency Chain
 
 ```text
-index.html
-TASK_DECOMPOSITION.md
+t-01
+  ↓
+t-02a
+  ↓
+t-02b
+  ↓
+t-02c
 ```
 
-Required commit:
+### t-02a — Tokens and Reset
 
+**Status:** Ready for review
+
+**Scope**
+- Create the CSS design-token layer.
+- Centralize colors, spacing, typography, radii, and content width.
+- Implement a small intentional global CSS reset.
+- Connect `style.css` to `index.html`.
+- Preserve the semantic HTML and accessibility architecture from `t-01`.
+- Preserve the skip link and visible keyboard focus states.
+- Keep this milestone CSS-only.
+
+**Boundary**
+- No responsive 2D grid implementation.
+- No JavaScript.
+- No localStorage.
+- No theme switching.
+- No theme toggle.
+
+**Acceptance Criteria**
+- `style.css` exists and is linked from `index.html`.
+- CSS colors are defined through custom properties.
+- CSS rules consume color tokens through `var(...)`.
+- Global box sizing is normalized.
+- Body margin is reset.
+- Media elements are constrained to available width.
+- Form controls inherit the document font.
+- Heading/list defaults are intentionally normalized.
+- Keyboard focus remains visible.
+- Skip-link behavior remains intact.
+- Zero `<div>` elements remain.
+- No JavaScript is introduced.
+
+**Commit**
 ```bash
-git add index.html TASK_DECOMPOSITION.md
-git commit -m "feat(html): semantic landmark tree"
+git add index.html style.css TASK_DECOMPOSITION.md
+git commit -m "feat(css): tokens & reset"
+```
+
+### t-02b — 2D Grid Layout
+
+**Dependency:** `t-02a`
+
+Reserved for the next milestone.
+
+**Commit**
+```bash
+git add index.html style.css TASK_DECOMPOSITION.md
+git commit -m "feat(css): responsive grid"
+```
+
+### t-02c — Theme Engine
+
+**Dependency:** `t-02b`
+
+Reserved for the final milestone.
+
+**Commit**
+```bash
+git add index.html style.css script.js TASK_DECOMPOSITION.md
+git commit -m "feat(js): dark mode engine"
 ```
