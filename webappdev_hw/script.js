@@ -80,6 +80,7 @@ document.querySelectorAll("[data-retry]").forEach((button) => {
 setProjectState("live");
 
 /* HW2 Step 3 — Keyboard Input Adapter */
+/* HW2 Step 3 + Step 4 — Keyboard Input Adapter */
 
 function handleDrumKeyDown(event) {
   if (event.repeat) {
@@ -103,6 +104,11 @@ function handleDrumKeyDown(event) {
   }
 
   audioEngine.play(soundId);
+
+  recorder.record({
+    key,
+    sound: soundId
+  });
 }
 
 document.addEventListener("keydown", handleDrumKeyDown);
