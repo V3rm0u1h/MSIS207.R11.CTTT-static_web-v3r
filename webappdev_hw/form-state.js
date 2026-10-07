@@ -1,4 +1,4 @@
-/* HW3 Commit 4 — Form State Machine + UI */
+/* HW3 Commit 5 — Form State Machine + Security Boundary */
 
 const FORM_STATES = Object.freeze({
   IDLE: "Idle",
@@ -31,6 +31,7 @@ let formState = FORM_STATES.IDLE;
 const contactForm = document.querySelector("#contact-form");
 const submitButton = document.querySelector("#submit-button");
 const formStatus = document.querySelector("#form-status");
+const nameInput = document.querySelector("#name");
 
 function transitionTo(nextState) {
   const allowedTransitions =
@@ -68,16 +69,24 @@ function renderFormState() {
       formStatus.textContent = "Submitting your message...";
       break;
 
-    case FORM_STATES.SUCCESS:
+    case FORM_STATES.SUCCESS: {
       submitButton.disabled = true;
       submitButton.textContent = "Submitted";
-      formStatus.textContent = "Your message was submitted successfully.";
+
+      const submittedName =
+        nameInput?.value || "there";
+
+      formStatus.textContent =
+        `Thanks, ${submittedName}. Your message was submitted successfully.`;
+
       break;
+    }
 
     case FORM_STATES.ERROR:
       submitButton.disabled = false;
       submitButton.textContent = "Try again";
-      formStatus.textContent = "Something went wrong. Please try again.";
+      formStatus.textContent =
+        "Something went wrong. Please try again.";
       break;
   }
 }
@@ -92,6 +101,11 @@ async function handleFormSubmit(event) {
   event.preventDefault();
 
   if (getFormState() !== FORM_STATES.IDLE) {
+    return;
+  }
+
+  if (!contactForm.checkValidity()) {
+    contactForm.reportValidity();
     return;
   }
 
