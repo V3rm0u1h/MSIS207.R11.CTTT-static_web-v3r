@@ -25,6 +25,7 @@
   <script src="audio-engine.js" defer></script>
   <script src="beat-recorder.js" defer></script>
   <script src="countdown.js" defer></script>
+  <script src="form-state.js" defer></script>
   <script src="script.js" defer></script>
 </head>
 <body>
@@ -264,6 +265,47 @@
           G — Crash
         </button>
       </div>
+    </section>
+    <section id="contact">
+      <h2>Contact</h2>
+
+      <form id="contact-form">
+        <label for="name">
+          Name
+        </label>
+
+        <input
+          id="name"
+          name="name"
+          type="text"
+          required
+          maxlength="100"
+        >
+
+        <label for="email">
+          Email
+        </label>
+
+        <input
+          id="email"
+          name="email"
+          type="email"
+          required
+          maxlength="254"
+        >
+
+        <button
+          type="submit"
+          id="submit-button"
+        >
+          Submit
+        </button>
+
+        <p
+          id="form-status"
+          aria-live="polite"
+        ></p>
+      </form>
     </section>
   </main>
 </body>
