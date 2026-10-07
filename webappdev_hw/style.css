@@ -1,0 +1,268 @@
+/* T-02A — Tokens & Reset */
+
+:root {
+    --color-background: #ffffff;
+    --color-surface: #f7f8fa;
+    --color-text: #17202a;
+    --color-text-muted: #4b5563;
+    --color-border: #6b7280;
+    --color-accent: #174ea6;
+    --color-focus: #174ea6;
+
+    --space-1: 0.25rem;
+    --space-2: 0.5rem;
+    --space-3: 0.75rem;
+    --space-4: 1rem;
+    --space-5: 1.5rem;
+    --space-6: 2rem;
+
+    --font-body:
+        system-ui,
+        -apple-system,
+        BlinkMacSystemFont,
+        "Segoe UI",
+        sans-serif;
+
+    --font-heading:
+        system-ui,
+        -apple-system,
+        BlinkMacSystemFont,
+        "Segoe UI",
+        sans-serif;
+
+    --radius-sm: 0.25rem;
+    --radius-md: 0.5rem;
+
+    --content-width: 72rem;
+}
+
+[data-theme="dark"] {
+    --color-background: #111827;
+    --color-surface: #1f2937;
+    --color-text: #f9fafb;
+    --color-text-muted: #d1d5db;
+    --color-border: #6b7280;
+    --color-accent: #93c5fd;
+    --color-focus: #fbbf24;
+}
+
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+html {
+    color-scheme: light;
+    scroll-behavior: smooth;
+}
+
+html[data-theme="dark"] {
+    color-scheme: dark;
+}
+
+body {
+    margin: 0;
+    min-width: 0;
+    background: var(--color-background);
+    color: var(--color-text);
+    font-family: var(--font-body);
+    line-height: 1.6;
+}
+
+img,
+svg,
+video {
+    display: block;
+    max-width: 100%;
+}
+
+img,
+video {
+    height: auto;
+}
+
+a {
+    color: var(--color-accent);
+    text-underline-offset: 0.15em;
+}
+
+button,
+input,
+textarea,
+select {
+    font: inherit;
+}
+
+button {
+    color: inherit;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+p,
+ul,
+ol {
+    margin-block: 0;
+}
+
+ul,
+ol {
+    padding-inline-start: 1.5rem;
+}
+
+header,
+nav,
+main {
+    width: min(
+        100% - (2 * var(--space-4)),
+        var(--content-width)
+    );
+    margin-inline: auto;
+}
+
+header {
+    padding-block: var(--space-6);
+}
+
+nav {
+    padding-block-end: var(--space-4);
+}
+
+main {
+    padding-block: var(--space-4) var(--space-6);
+}
+
+section {
+    border-block-start: 1px solid var(--color-border);
+    padding-block: var(--space-6);
+}
+
+h1,
+h2,
+h3 {
+    font-family: var(--font-heading);
+    line-height: 1.2;
+}
+
+h1 {
+    font-size: clamp(2rem, 5vw, 3rem);
+}
+
+h2 {
+    margin-block-end: var(--space-3);
+    font-size: clamp(1.5rem, 3vw, 2rem);
+}
+
+h3 {
+    font-size: 1.25rem;
+}
+
+p {
+    max-width: 65ch;
+    color: var(--color-text-muted);
+}
+
+nav ul {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-4);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.skip-link {
+    position: absolute;
+    inset-block-start: var(--space-2);
+    inset-inline-start: var(--space-2);
+    z-index: 1000;
+    padding: var(--space-2) var(--space-3);
+    border: 2px solid var(--color-focus);
+    border-radius: var(--radius-sm);
+    background: var(--color-background);
+    color: var(--color-text);
+    transform: translateY(-200%);
+}
+
+.skip-link:focus {
+    transform: translateY(0);
+    outline: 3px solid var(--color-focus);
+    outline-offset: 2px;
+}
+
+:focus-visible {
+    outline: 3px solid var(--color-focus);
+    outline-offset: 3px;
+}
+
+/* T-02B — Responsive 2D Grid Layout */
+
+main {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-auto-rows: minmax(12rem, auto);
+    gap: var(--space-5);
+}
+
+section {
+    min-width: 0;
+    padding-inline: var(--space-5);
+    background: var(--color-surface);
+}
+
+/* T-03C — Empty & Error States */
+
+.state-panel[hidden] {
+  display: none;
+}
+
+.state-panel {
+  display: block;
+  margin-block-start: var(--space-4);
+  padding: var(--space-5);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-background);
+}
+
+.state-panel p {
+  margin-block-start: var(--space-2);
+}
+
+.state-panel--empty {
+  border-style: dashed;
+}
+
+.state-panel--error {
+  border-width: 2px;
+}
+
+.state-action {
+  margin-block-start: var(--space-4);
+  padding: var(--space-2) var(--space-3);
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.state-action:hover {
+  border-color: var(--color-accent);
+}
+
+.state-action:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 3px;
+}
+
+@media (max-width: 30rem) {
+  .state-panel {
+    padding: var(--space-3);
+  }
+}
