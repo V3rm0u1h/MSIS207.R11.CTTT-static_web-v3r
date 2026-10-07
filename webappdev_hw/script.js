@@ -78,3 +78,31 @@ document.querySelectorAll("[data-retry]").forEach((button) => {
 /* T-03C demo controls */
 
 setProjectState("live");
+
+/* HW2 Step 3 — Keyboard Input Adapter */
+
+function handleDrumKeyDown(event) {
+  if (event.repeat) {
+    return;
+  }
+
+  const key = event.key.toLowerCase();
+
+  const control = document.querySelector(
+    `[data-key="${key}"]`
+  );
+
+  if (!control) {
+    return;
+  }
+
+  const soundId = control.dataset.sound;
+
+  if (!soundId) {
+    return;
+  }
+
+  audioEngine.play(soundId);
+}
+
+document.addEventListener("keydown", handleDrumKeyDown);
