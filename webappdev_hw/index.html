@@ -24,6 +24,7 @@
   <link rel="stylesheet" href="skeleton.css">
   <script src="audio-engine.js" defer></script>
   <script src="beat-recorder.js" defer></script>
+  <script src="countdown.js" defer></script>
   <script src="script.js" defer></script>
 </head>
 <body>
@@ -56,6 +57,25 @@
       <p>
          Lu Le Huong Giang is a Lead Engineer focused on building reliable,
         accessible, and maintainable software systems.
+      </p>
+    </section>
+
+    <section id="countdown">
+      <h2>Launch Countdown</h2>
+
+      <p>
+        Time remaining until the launch deadline:
+      </p>
+
+      <time
+        id="countdown-deadline"
+        datetime="2026-12-31T23:59:59Z"
+      >
+        December 31, 2026 at 23:59:59 UTC
+      </time>
+
+      <p id="countdown-display" aria-live="polite">
+        Loading countdown...
       </p>
     </section>
 
