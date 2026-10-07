@@ -3,6 +3,21 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta
+    http-equiv="Content-Security-Policy"
+    content="
+      default-src 'self';
+      script-src 'self';
+      style-src 'self';
+      img-src 'self' data:;
+      font-src 'self';
+      connect-src 'self';
+      object-src 'none';
+      base-uri 'self';
+      frame-ancestors 'none';
+      form-action 'self';
+    "
+  >
   <meta name="description" content=" Lu Le Huong Giang — Lead Engineer portfolio">
   <title> Lu Le Huong Giang</title>
   <link rel="stylesheet" href="style.css">
