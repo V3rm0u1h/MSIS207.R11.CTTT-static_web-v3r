@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Mini-React renderToDOM Demo</title>
+    <style>
+        body { font: 1rem/1.5 system-ui, sans-serif; margin: 2rem auto; max-width: 48rem; padding: 0 1rem; }
+        #demo-root { border: 1px solid #c7ced6; padding: 1rem; }
+        button { padding: .5rem .8rem; }
+        code { overflow-wrap: anywhere; }
+    </style>
+</head>
+<body>
+    <h1>Mini-React renderToDOM</h1>
+    <p>This isolated demo mounts one VNode tree once. Inspect the Elements panel to verify the semantic hierarchy and literal text safety.</p>
+    <main id="demo-root" aria-label="Rendered VNode demo"></main>
+    <script type="module">
+        import { createElement } from "./createElement.js";
+        import { mountVNode } from "./renderToDOM.js";
+        import { attachRootEventDelegation } from "./events.js";
+
+        const root = document.querySelector("#demo-root");
+        attachRootEventDelegation(root, ["click"]);
+        const vnode = createElement("section", { id: "rendered-section", "data-testid": "semantic-tree" },
+            createElement("h2", null, "Semantic VNode tree"),
+            createElement("p", null, "Security test rendered literally: ", "<script>alert(1)</script>"),
+            createElement("button", {
+                type: "button",
+                onClick: () => {
+                    document.querySelector("#demo-status").textContent = "Delegated click handler ran.";
+                }
+            }, "Test delegated click"),
+            createElement("p", { id: "demo-status", role: "status" })
+        );
+        mountVNode(root, vnode);
+    </script>
+</body>
+</html>
