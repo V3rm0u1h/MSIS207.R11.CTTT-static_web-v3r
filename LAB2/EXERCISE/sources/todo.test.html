@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Mini-React Todo — Application Tests</title>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        .test-results { width: min(100% - 32px, 760px); margin: 20px auto 48px; padding: 20px; border: 1px solid #e6e5dd; border-radius: 14px; background: white; }
+        .test-results h2 { margin-top: 0; }
+        .test-results ul { padding-left: 20px; }
+        .test-results li { margin: 7px 0; }
+        .test-results .pass { color: #245e43; }
+        .test-results .fail { color: #a33c3c; }
+    </style>
+    <script type="module" src="todo.test.js"></script>
+</head>
+<body>
+    <a class="skip-link" href="#app-root">Skip to application</a>
+    <main id="app-root" class="app-root" aria-label="Todo application test fixture"></main>
+    <section class="test-results" aria-labelledby="tests-title">
+        <h2 id="tests-title">Todo application checks</h2>
+        <p id="summary" role="status" aria-live="polite">Running checks…</p>
+        <ul id="results"></ul>
+    </section>
+</body>
+</html>

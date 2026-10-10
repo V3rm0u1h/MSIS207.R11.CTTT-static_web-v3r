@@ -120,6 +120,22 @@ test("new descendants work after the old descendants are replaced", () => {
     assert(calls === 1, "new child should work with the existing root listener");
 });
 
+test("delegates form submit events through the root", () => {
+    const root = createRoot();
+    attachRootEventDelegation(root, ["click", "submit"]);
+    const form = document.createElement("form");
+    root.append(form);
+    let calls = 0;
+    registerDelegatedHandler(form, "submit", (event) => {
+        calls += 1;
+        event.preventDefault();
+    });
+    const event = new Event("submit", { bubbles: true, cancelable: true });
+    form.dispatchEvent(event);
+    assert(calls === 1, `expected one submit callback, got ${calls}`);
+    assert(event.defaultPrevented, "form callback should be able to prevent its own default submission");
+});
+
 test("ignores elements without registered callbacks", () => {
     const root = createRoot();
     attachRootEventDelegation(root);
