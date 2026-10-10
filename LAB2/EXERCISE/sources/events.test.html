@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Mini-React Event Delegation Tests</title>
+    <style>
+        body { max-width: 850px; margin: 40px auto; padding: 0 20px; font: 16px/1.6 system-ui, sans-serif; color: #172033; }
+        h1 { line-height: 1.2; }
+        #results { padding: 0; list-style: none; }
+        #results li { margin: 8px 0; padding: 10px 14px; border-radius: 8px; background: #f1f4f8; }
+        #results li.pass { border-left: 4px solid #16805d; }
+        #results li.fail { border-left: 4px solid #c4314b; }
+        #test-root { margin-top: 24px; padding: 16px; border: 1px solid #d7deea; }
+    </style>
+    <script type="module" src="events.test.js"></script>
+</head>
+<body>
+    <a href="index.html">Back to interactive demo</a>
+    <h1>Root event delegation tests</h1>
+    <p>These browser-native checks run automatically when this page loads.</p>
+    <p id="summary" role="status" aria-live="polite">Running tests…</p>
+    <ul id="results"></ul>
+    <section id="test-root" aria-label="Test fixture"></section>
+</body>
+</html>
