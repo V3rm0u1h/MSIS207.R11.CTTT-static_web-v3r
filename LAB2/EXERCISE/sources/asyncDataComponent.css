@@ -1,0 +1,86 @@
+/* Resilient Async Data Component — skeleton and state presentation */
+.async-data {
+    box-sizing: border-box;
+    width: min(100%, 48rem);
+    margin-inline: auto;
+    padding: 1.5rem;
+    border: 1px solid #d9e0e8;
+    border-radius: 0.75rem;
+    background: #fff;
+    color: #17202a;
+}
+
+.async-data__heading {
+    margin: 0 0 0.5rem;
+    font-size: 1.35rem;
+    line-height: 1.3;
+}
+
+.async-data__status {
+    margin: 0 0 1rem;
+    color: #4b5563;
+}
+
+.async-data__skeleton-list,
+.async-data__list {
+    display: grid;
+    gap: 0.875rem;
+    margin: 1rem 0 0;
+    padding: 0;
+    list-style: none;
+}
+
+.async-data__skeleton-card,
+.async-data__card {
+    display: grid;
+    gap: 0.75rem;
+    min-height: 7.5rem;
+    padding: 1rem;
+    border: 1px solid #e1e6ec;
+    border-radius: 0.5rem;
+}
+
+.async-data__skeleton-line {
+    display: block;
+    height: 0.8rem;
+    border-radius: 0.25rem;
+    background: #e8edf2;
+    animation: async-data-pulse 1.4s ease-in-out infinite;
+}
+
+.async-data__skeleton-line--title { width: 48%; height: 1.1rem; }
+.async-data__skeleton-line--body { width: 92%; }
+.async-data__skeleton-line--short { width: 64%; }
+
+.async-data__item-title {
+    margin: 0 0 0.4rem;
+    font-size: 1.05rem;
+}
+
+.async-data__item-description { margin: 0; line-height: 1.55; }
+.async-data__empty { margin: 0; }
+.async-data__error-message { margin: 0 0 1rem; color: #9b1c1c; }
+
+.async-data__retry {
+    min-height: 2.75rem;
+    padding: 0.65rem 1rem;
+    border: 2px solid #174ea6;
+    border-radius: 0.4rem;
+    background: #174ea6;
+    color: #fff;
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.async-data__retry:hover { background: #123d82; }
+.async-data__retry:focus-visible { outline: 3px solid #f2b705; outline-offset: 3px; }
+
+@keyframes async-data-pulse {
+    0%, 100% { opacity: 0.62; }
+    50% { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .async-data__skeleton-line { animation: none; }
+}

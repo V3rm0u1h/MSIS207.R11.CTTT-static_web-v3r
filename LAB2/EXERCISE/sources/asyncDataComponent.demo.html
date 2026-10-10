@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Mini-React — Resilient Async Data Component</title>
+    <link rel="stylesheet" href="asyncDataComponent.css">
+    <style>
+        :root { color-scheme: light; font-family: system-ui, sans-serif; background: #f4f6f8; }
+        body { margin: 0; padding: 2rem 1rem; }
+        main { max-width: 52rem; margin-inline: auto; }
+        .demo-intro { margin-bottom: 1.25rem; color: #4b5563; line-height: 1.6; }
+        #demo-root { min-height: 16rem; }
+        .demo-controls { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0 0 1rem; }
+        .demo-controls button { min-height: 2.5rem; padding: 0.5rem 0.8rem; font: inherit; cursor: pointer; }
+        .demo-controls button:focus-visible { outline: 3px solid #174ea6; outline-offset: 3px; }
+    </style>
+</head>
+<body>
+<main>
+    <h1>Resilient Async Data Component</h1>
+    <p class="demo-intro">Use the controls to inspect each state. The data source is mocked locally; no backend or network request is used. The first automatic request fails, and retry succeeds.</p>
+    <nav class="demo-controls" aria-label="Demo controls">
+        <button id="reload-demo" type="button">Start / refresh request</button>
+        <button id="dispose-demo" type="button">Dispose component</button>
+    </nav>
+    <section id="demo-root" aria-label="Async data component demo"></section>
+</main>
+<script type="module">
+    import { mountAsyncDataComponent } from "./asyncDataComponent.js";
+
+    let requestCount = 0;
+    const fetchData = async ({ signal }) => {
+        requestCount += 1;
+        await new Promise((resolve, reject) => {
+            const timeout = setTimeout(resolve, 1800);
+            signal?.addEventListener("abort", () => {
+                clearTimeout(timeout);
+                reject(new Error("Request aborted"));
+            }, { once: true });
+        });
+        if (requestCount === 1) throw new Error("Demo transport error (details must not reach the UI)");
+        return {
+            items: [
+                { title: "Safe rendering", description: "Text is rendered through VNodes and DOM text nodes." },
+                { title: "Latest request wins", description: "Older success and failure responses cannot replace a newer request." },
+                { title: "Accessible feedback", description: "Loading status, reduced-motion support, and a keyboard-accessible retry action." }
+            ]
+        };
+    };
+
+    const root = document.querySelector("#demo-root");
+    let instance = mountAsyncDataComponent(root, fetchData);
+    document.querySelector("#reload-demo").addEventListener("click", () => {
+        if (!instance) instance = mountAsyncDataComponent(root, fetchData);
+        else void instance.refresh();
+    });
+    document.querySelector("#dispose-demo").addEventListener("click", () => {
+        instance?.dispose();
+        instance = null;
+    });
+</script>
+</body>
+</html>
