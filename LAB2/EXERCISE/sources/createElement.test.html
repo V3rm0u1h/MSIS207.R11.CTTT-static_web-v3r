@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mini-React Core — createElement Tests</title>
+  <style>
+    :root { color-scheme: light; font-family: system-ui, sans-serif; color: #182230; background: #f4f6fa; }
+    body { max-width: 760px; margin: 0 auto; padding: 2rem 1rem; }
+    main { padding: 1.5rem; background: #fff; border: 1px solid #d9e0e9; border-radius: 12px; }
+    h1 { margin-top: 0; }
+    #test-summary { font-weight: 700; }
+    li { margin: .45rem 0; }
+    li[data-result="pass"] { color: #17663a; }
+    li[data-result="fail"] { color: #b42318; }
+    code { background: #edf1f7; padding: .1rem .3rem; border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>createElement Factory Tests</h1>
+    <p>These checks validate VNode shape and child normalization without mounting real DOM elements.</p>
+    <p id="test-summary" role="status" aria-live="polite">Running tests…</p>
+    <ul id="test-results" aria-label="Test results"></ul>
+    <noscript>JavaScript must be enabled to run these tests.</noscript>
+  </main>
+  <script type="module" src="./createElement.test.js"></script>
+</body>
+</html>
