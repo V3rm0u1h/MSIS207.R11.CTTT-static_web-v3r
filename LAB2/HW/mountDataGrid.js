@@ -1,13 +1,16 @@
 /**
- * Accessible Data-Grid — mount and interaction wiring (PRD 2)
+ * Accessible Data-Grid — mount and interaction wiring (PRD 2, PRD 3)
  *
  * Layout inside the mount root:
  *   <form role="search">  filter field, rendered once and never rebuilt
  *   <p role="status">     live region, text updated once per change
  *   <section>             the grid, re-rendered on every state change
+ *   <p>                   rows-per-page select, rendered once
+ *   <nav>                 pager, re-rendered on every state change
  *
- * Keeping the filter field out of the re-rendered subtree means typing never
- * loses focus or caret position. Events go through the root delegation system.
+ * Form controls live outside the re-rendered subtrees, so using them never
+ * loses focus or caret position. Re-rendered buttons get focus back after
+ * each render. Events go through the root delegation system.
  */
 
 import { createElement } from "./createElement.js";
@@ -15,6 +18,7 @@ import { renderToDOM } from "./renderToDOM.js";
 import { attachRootEventDelegation } from "./events.js";
 import { DataGrid, DEFAULT_EMPTY_MESSAGE } from "./dataGrid.js";
 import { createGridController } from "./gridModel.js";
+import { Pager, PageSizeSelect } from "./pager.js";
 
 export const DEFAULT_FILTER_DEBOUNCE_MS = 200;
 
@@ -74,7 +78,13 @@ export function mountDataGrid(root, props, options = {}) {
         throw new TypeError("Data-Grid: filterDebounceMs must be a non-negative number.");
     }
 
-    const controller = createGridController({ columns: props.columns, rows: props.rows, locale: props.locale });
+    const controller = createGridController({
+        columns: props.columns,
+        rows: props.rows,
+        locale: props.locale,
+        pageSize: props.pageSize,
+        pageSizeOptions: props.pageSizeOptions
+    });
     const id = props.id ?? "data-grid";
     const emptyMessage = props.emptyMessage ?? DEFAULT_EMPTY_MESSAGE;
     const filterableColumns = controller.columns.filter((column) => column.filterable === true);
@@ -90,7 +100,18 @@ export function mountDataGrid(root, props, options = {}) {
             emptyMessage: query === "" ? emptyMessage : `No rows match “${query}”.`,
             sortKey: snapshot.sortKey,
             sortDirection: snapshot.sortDirection,
-            onSort: (key) => controller.toggleSort(key)
+            onSort: (key) => controller.toggleSort(key),
+            rowCount: snapshot.visibleCount,
+            firstRowIndex: snapshot.firstRowIndex
+        });
+    }
+
+    function pagerVNode(snapshot) {
+        return Pager({
+            caption: props.caption,
+            page: snapshot.page,
+            pageCount: snapshot.pageCount,
+            onPage: (page) => controller.setPage(page)
         });
     }
 
@@ -119,6 +140,13 @@ export function mountDataGrid(root, props, options = {}) {
     // Build every node first: a validation error leaves root untouched.
     const initial = controller.getSnapshot();
     let gridElement = renderToDOM(gridVNode(initial));
+    let pagerElement = renderToDOM(pagerVNode(initial));
+    const pageSizeElement = renderToDOM(PageSizeSelect({
+        id,
+        pageSize: initial.pageSize,
+        options: initial.pageSizeOptions,
+        onChange: (event) => controller.setPageSize(Number(event.target.value))
+    }));
     const statusElement = renderToDOM(createElement("p", {
         id: `${id}-status`,
         role: "status",
@@ -137,11 +165,21 @@ export function mountDataGrid(root, props, options = {}) {
         : null;
 
     attachRootEventDelegation(root, ["click", "submit", "input"]);
-    root.replaceChildren(...[filterElement, statusElement, gridElement].filter(Boolean));
+    root.replaceChildren(...[filterElement, statusElement, gridElement, pageSizeElement, pagerElement].filter(Boolean));
+
+    function restorePagerFocus(action) {
+        const same = pagerElement.querySelector(`[data-page-action="${CSS.escape(action)}"]`);
+        // A button that just became disabled (Next on the last page) cannot hold
+        // focus, so fall back to the current page, then to the grid.
+        const target = same && !same.disabled ? same
+            : pagerElement.querySelector("[aria-current=page]") ?? gridElement;
+        target.focus();
+    }
 
     function rerender(snapshot) {
         const active = root.ownerDocument.activeElement;
         const focusedSortKey = active && gridElement.contains(active) ? active.getAttribute("data-sort-key") : null;
+        const focusedPageAction = active && pagerElement.contains(active) ? active.getAttribute("data-page-action") : null;
         const regionWasFocused = active === gridElement;
         const scrollLeft = gridElement.scrollLeft;
 
@@ -150,9 +188,15 @@ export function mountDataGrid(root, props, options = {}) {
         gridElement = nextGrid;
         gridElement.scrollLeft = scrollLeft;
 
-        // The pressed sort button was replaced; move focus to its new copy.
+        const nextPager = renderToDOM(pagerVNode(snapshot));
+        pagerElement.replaceWith(nextPager);
+        pagerElement = nextPager;
+
+        // Pressed buttons were replaced; move focus to their new copies.
         if (focusedSortKey !== null) {
             gridElement.querySelector(`[data-sort-key="${CSS.escape(focusedSortKey)}"]`)?.focus();
+        } else if (focusedPageAction !== null) {
+            restorePagerFocus(focusedPageAction);
         } else if (regionWasFocused) {
             gridElement.focus();
         }
@@ -167,6 +211,7 @@ export function mountDataGrid(root, props, options = {}) {
     return Object.freeze({
         controller,
         get element() { return gridElement; },
+        get pager() { return pagerElement; },
         flushFilter,
         dispose() {
             if (!mounted) return;

@@ -32,9 +32,9 @@ function typeFilter(root, value) {
     return input;
 }
 
-test("mount renders filter form, status and grid in that order", () => {
+test("mount renders filter form, status, grid, page size and pager in that order", () => {
     const { root } = mount();
-    assertDeepEqual([...root.children].map((child) => child.tagName), ["FORM", "P", "SECTION"], "Child order");
+    assertDeepEqual([...root.children].map((child) => child.tagName), ["FORM", "P", "SECTION", "P", "NAV"], "Child order");
     const form = root.querySelector("form");
     assertEqual(form.getAttribute("role"), "search", "Search landmark");
     assertEqual(form.getAttribute("aria-label"), "Filter People", "Landmark label");
@@ -44,7 +44,7 @@ test("mount renders filter form, status and grid in that order", () => {
     assertEqual(root.ownerDocument.getElementById(input.getAttribute("aria-describedby")).textContent,
         "Searches Name and Team.", "Hint lists filterable columns");
     assertEqual(status(root).getAttribute("aria-live"), "polite", "Polite live region");
-    assertEqual(status(root).textContent, "3 of 3 rows shown.", "Initial status");
+    assertEqual(status(root).textContent, "Rows 1–3 of 3.", "Initial status");
 });
 
 test("filter form is omitted when no column is filterable", () => {
@@ -66,7 +66,7 @@ test("clicking a sort button cycles aria-sort, row order and the announcement", 
     sortButton(root, "name").click();
     assertEqual(sortButton(root, "name").closest("th").getAttribute("aria-sort"), "ascending", "First click");
     assertDeepEqual(bodyNames(root), ["An", "Binh", "Chi"], "Ascending rows");
-    assertEqual(status(root).textContent, "Sorted by Name, ascending. 3 of 3 rows shown.", "Ascending message");
+    assertEqual(status(root).textContent, "Sorted by Name, ascending. Rows 1–3 of 3.", "Ascending message");
 
     sortButton(root, "name").click();
     assertEqual(sortButton(root, "name").closest("th").getAttribute("aria-sort"), "descending", "Second click");
@@ -75,7 +75,7 @@ test("clicking a sort button cycles aria-sort, row order and the announcement", 
     sortButton(root, "name").click();
     assert(!sortButton(root, "name").closest("th").hasAttribute("aria-sort"), "Third click clears aria-sort");
     assertDeepEqual(bodyNames(root), ["Chi", "An", "Binh"], "Original order");
-    assertEqual(status(root).textContent, "Sorting cleared. 3 of 3 rows shown.", "Cleared message");
+    assertEqual(status(root).textContent, "Sorting cleared. Rows 1–3 of 3.", "Cleared message");
 });
 
 test("only the active column carries aria-sort", () => {
@@ -101,7 +101,7 @@ test("filter input is debounced and then filters rows", async () => {
     assertEqual(bodyNames(root).length, 3, "No change before the debounce");
     await wait(DEBOUNCE + 30);
     assertDeepEqual(bodyNames(root), ["Chi", "Binh"], "Filtered rows");
-    assertEqual(status(root).textContent, "Filtered by “design”. 2 of 3 rows shown.", "Filter message");
+    assertEqual(status(root).textContent, "Filtered by “design”. Rows 1–2 of 2, filtered from 3.", "Filter message");
 });
 
 test("typing never rebuilds or blurs the filter input", async () => {

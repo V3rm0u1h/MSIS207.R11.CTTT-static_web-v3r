@@ -6,6 +6,8 @@
  * is rendered as a text node; HTML strings are never parsed.
  * PRD 2: sortable columns render a native <button> inside their <th>, and the
  * active column exposes its direction through aria-sort.
+ * PRD 3: when the grid shows one page of a larger set, aria-rowcount and
+ * aria-rowindex tell screen readers each row's true position.
  *
  * This module is pure: it builds VNodes and never touches the DOM. Mounting
  * and state live in mountDataGrid.js and gridModel.js.
@@ -143,6 +145,27 @@ function validateSortProps(props) {
     return { sortKey, sortDirection, onSort };
 }
 
+function isNonNegativeInteger(value) {
+    return Number.isSafeInteger(value) && value >= 0;
+}
+
+function validateRowPosition(props) {
+    const { rowCount, firstRowIndex = 0 } = props;
+    if (rowCount === undefined) {
+        if (props.firstRowIndex !== undefined) {
+            throw new TypeError("Data-Grid: firstRowIndex requires rowCount.");
+        }
+        return { rowCount: null, firstRowIndex: 0 };
+    }
+    if (!isNonNegativeInteger(rowCount) || !isNonNegativeInteger(firstRowIndex)) {
+        throw new TypeError("Data-Grid: rowCount and firstRowIndex must be non-negative integers.");
+    }
+    if (firstRowIndex + props.rows.length > rowCount) {
+        throw new TypeError("Data-Grid: rows do not fit inside rowCount at firstRowIndex.");
+    }
+    return { rowCount, firstRowIndex };
+}
+
 function validateGridProps(props) {
     if (!isPlainObject(props)) {
         throw new TypeError("Data-Grid: props must be a plain object.");
@@ -164,7 +187,8 @@ function validateGridProps(props) {
 
     return {
         id, caption, locale, emptyMessage, columns: props.columns, rows: props.rows,
-        ...validateSortProps(props)
+        position: validateRowPosition(props),
+        sort: validateSortProps(props)
     };
 }
 
@@ -218,12 +242,13 @@ function renderHeaderCell(column, sort) {
     );
 }
 
-function renderHeaderRow(columns, sort) {
-    return createElement("tr", null, columns.map((column) => renderHeaderCell(column, sort)));
+function renderHeaderRow(columns, sort, ariaRowIndex) {
+    return createElement("tr", { "aria-rowindex": ariaRowIndex },
+        columns.map((column) => renderHeaderCell(column, sort)));
 }
 
-function renderBodyRow(row, columns, formatters) {
-    return createElement("tr", null,
+function renderBodyRow(row, columns, formatters, ariaRowIndex) {
+    return createElement("tr", { "aria-rowindex": ariaRowIndex },
         columns.map((column, columnIndex) => {
             const content = renderCellContent(row[column.key], column, formatters);
             // The first column names the row, so it is announced with every cell in that row.
@@ -242,20 +267,28 @@ function renderEmptyRow(columns, message) {
 
 /** Build the Data-Grid VNode tree. Throws TypeError before building anything if props are invalid. */
 export function DataGrid(props) {
-    const { id, caption, locale, emptyMessage, columns, rows, ...sort } = validateGridProps(props);
+    const { id, caption, locale, emptyMessage, columns, rows, position, sort } = validateGridProps(props);
     const formatters = createFormatters(locale);
     const captionId = `${id}-caption`;
+
+    // aria-rowindex is 1-based and counts the header row, so data rows start at 2.
+    // An empty page has no data rows to position, so the attributes are omitted.
+    const positioned = position.rowCount !== null && rows.length > 0;
+    const rowIndex = (index) => (positioned ? position.firstRowIndex + index + 2 : null);
 
     // The wrapper scrolls horizontally on narrow screens, so it is a labelled,
     // focusable region that keyboard users can scroll.
     return createElement("section", { id, className: "data-grid", "aria-labelledby": captionId, tabindex: 0 },
-        createElement("table", { className: "data-grid__table" },
+        createElement("table", {
+            className: "data-grid__table",
+            "aria-rowcount": positioned ? position.rowCount + 1 : null
+        },
             createElement("caption", { id: captionId, className: "data-grid__caption" }, caption),
-            createElement("thead", null, renderHeaderRow(columns, sort)),
+            createElement("thead", null, renderHeaderRow(columns, sort, positioned ? 1 : null)),
             createElement("tbody", null,
                 rows.length === 0
                     ? renderEmptyRow(columns, emptyMessage)
-                    : rows.map((row) => renderBodyRow(row, columns, formatters))
+                    : rows.map((row, index) => renderBodyRow(row, columns, formatters, rowIndex(index)))
             )
         )
     );

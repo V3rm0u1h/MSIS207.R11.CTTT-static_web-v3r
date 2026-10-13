@@ -1,8 +1,8 @@
 /**
- * Accessible Data-Grid — PRD 2: sorting and filtering model
+ * Accessible Data-Grid — sorting, filtering (PRD 2) and pagination (PRD 3) model
  *
  * DOM-free state for the grid. Data flows one way:
- *   rows -> filterRows -> sortRows -> view
+ *   rows -> filterRows -> sortRows -> paginate -> view
  * Every state change goes through the controller and notifies subscribers
  * once, with a description of what changed for the live region.
  */
@@ -16,6 +16,8 @@ import {
     validateLocale,
     validateRows
 } from "./dataGrid.js";
+
+export const DEFAULT_PAGE_SIZE_OPTIONS = Object.freeze([10, 25, 50]);
 
 function isPlainObject(value) {
     if (value === null || typeof value !== "object") return false;
@@ -88,13 +90,21 @@ export function sortRows(rows, column, direction, collator) {
         .map(({ row }) => row);
 }
 
-function rowCountText(visibleCount, totalCount) {
-    return `${visibleCount} of ${totalCount} ${totalCount === 1 ? "row" : "rows"} shown.`;
+/** Number of pages for a row count; 0 rows means 0 pages. */
+export function pageCountFor(rowCount, pageSize) {
+    return Math.ceil(rowCount / pageSize);
+}
+
+/** "Rows 11–20 of 47." plus the unfiltered total when a filter hides rows. */
+export function rowRangeText({ visibleCount, totalCount, firstRowIndex, rows }) {
+    if (visibleCount === 0) return `0 of ${totalCount} ${totalCount === 1 ? "row" : "rows"} shown.`;
+    const range = `Rows ${firstRowIndex + 1}–${firstRowIndex + rows.length} of ${visibleCount}`;
+    return visibleCount === totalCount ? `${range}.` : `${range}, filtered from ${totalCount}.`;
 }
 
 /** The live-region message for a snapshot, based on what last changed. */
 export function describeSnapshot(snapshot, columns) {
-    const counts = rowCountText(snapshot.visibleCount, snapshot.totalCount);
+    const counts = rowRangeText(snapshot);
     const change = snapshot.lastChange;
 
     if (change === "sort") {
@@ -106,10 +116,21 @@ export function describeSnapshot(snapshot, columns) {
         const query = snapshot.filterText.trim();
         return query === "" ? `Filter cleared. ${counts}` : `Filtered by “${query}”. ${counts}`;
     }
+    if (change === "page") return `Page ${snapshot.page} of ${snapshot.pageCount}. ${counts}`;
+    if (change === "pageSize") return `${snapshot.pageSize} rows per page. ${counts}`;
     return counts;
 }
 
-/** Create the grid's single source of truth for sort and filter state. */
+function validatePageSizeOptions(options) {
+    if (!Array.isArray(options) || options.length === 0 ||
+        !options.every((size) => Number.isSafeInteger(size) && size > 0) ||
+        new Set(options).size !== options.length) {
+        throw new TypeError("Data-Grid: pageSizeOptions must be a non-empty array of unique positive integers.");
+    }
+    return Object.freeze([...options].sort((left, right) => left - right));
+}
+
+/** Create the grid's single source of truth for sort, filter and page state. */
 export function createGridController(props) {
     if (!isPlainObject(props)) {
         throw new TypeError("Data-Grid: controller props must be a plain object.");
@@ -119,20 +140,38 @@ export function createGridController(props) {
     const locale = validateLocale(props.locale);
     const formatters = createFormatters(locale);
     const collator = new Intl.Collator(locale, { sensitivity: "base", numeric: true });
+    const pageSizeOptions = validatePageSizeOptions(props.pageSizeOptions ?? DEFAULT_PAGE_SIZE_OPTIONS);
+    const initialPageSize = props.pageSize ?? pageSizeOptions[0];
+    if (!pageSizeOptions.includes(initialPageSize)) {
+        throw new TypeError(`Data-Grid: pageSize must be one of ${pageSizeOptions.join(", ")}.`);
+    }
     const subscribers = new Set();
 
-    let state = Object.freeze({ sortKey: null, sortDirection: "none", filterText: "", lastChange: null });
+    let state = Object.freeze({
+        sortKey: null, sortDirection: "none", filterText: "",
+        page: 1, pageSize: initialPageSize, lastChange: null
+    });
     let snapshot = buildSnapshot();
 
     function buildSnapshot() {
         const filtered = filterRows(rows, columns, state.filterText, formatters, locale);
         const sortColumn = columns.find((column) => column.key === state.sortKey);
-        const visibleRows = Object.freeze(sortRows(filtered, sortColumn, state.sortDirection, collator));
+        const sorted = sortRows(filtered, sortColumn, state.sortDirection, collator);
+
+        const pageCount = pageCountFor(sorted.length, state.pageSize);
+        // Clamp so a filter that shrinks the result never leaves us past the last page.
+        const page = Math.min(state.page, Math.max(pageCount, 1));
+        if (page !== state.page) state = Object.freeze({ ...state, page });
+        const firstRowIndex = (page - 1) * state.pageSize;
+
         return Object.freeze({
             ...state,
-            rows: visibleRows,
-            visibleCount: visibleRows.length,
-            totalCount: rows.length
+            rows: Object.freeze(sorted.slice(firstRowIndex, firstRowIndex + state.pageSize)),
+            visibleCount: sorted.length,
+            totalCount: rows.length,
+            pageCount,
+            firstRowIndex,
+            pageSizeOptions
         });
     }
 
@@ -162,7 +201,26 @@ export function createGridController(props) {
         }
         // Unchanged text is not a change, so it must not produce a second announcement.
         if (filterText.trim() === state.filterText.trim()) return;
-        commit({ filterText, lastChange: "filter" });
+        commit({ filterText, page: 1, lastChange: "filter" });
+    }
+
+    function setPage(page) {
+        if (!Number.isSafeInteger(page)) {
+            throw new TypeError("Data-Grid: page must be an integer.");
+        }
+        if (page < 1 || page > Math.max(snapshot.pageCount, 1)) {
+            throw new RangeError(`Data-Grid: page ${page} is outside 1–${Math.max(snapshot.pageCount, 1)}.`);
+        }
+        if (page === state.page) return;
+        commit({ page, lastChange: "page" });
+    }
+
+    function setPageSize(pageSize) {
+        if (!pageSizeOptions.includes(pageSize)) {
+            throw new TypeError(`Data-Grid: pageSize must be one of ${pageSizeOptions.join(", ")}.`);
+        }
+        if (pageSize === state.pageSize) return;
+        commit({ pageSize, page: 1, lastChange: "pageSize" });
     }
 
     function subscribe(subscriber) {
@@ -177,6 +235,8 @@ export function createGridController(props) {
         columns,
         toggleSort,
         setFilter,
+        setPage,
+        setPageSize,
         subscribe,
         getSnapshot: () => snapshot,
         describe: (current = snapshot) => describeSnapshot(current, columns)

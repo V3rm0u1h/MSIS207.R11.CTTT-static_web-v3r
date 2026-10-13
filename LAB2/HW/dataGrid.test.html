@@ -20,7 +20,7 @@
 <body>
   <main>
     <h1>Data-Grid Tests</h1>
-    <p>These checks render the grid into the real browser DOM. PRD 1 covers structure, type guards, XSS safety, formatting and theme contrast. PRD 2 covers sorting, filtering, focus and live-region announcements.</p>
+    <p>These checks render the grid into the real browser DOM. PRD 1 covers structure, type guards, XSS safety, formatting and theme contrast. PRD 2 covers sorting, filtering, focus and live-region announcements. PRD 3 covers pagination, row positions and pager focus.</p>
     <p id="test-summary" role="status" aria-live="polite">Running tests…</p>
     <ul id="test-results" aria-label="Test results"></ul>
     <section id="test-sandbox" aria-label="Test sandbox"></section>
@@ -31,6 +31,7 @@
     import "./dataGrid.test.js";
     import "./gridModel.test.js";
     import "./mountDataGrid.test.js";
+    import "./pagination.test.js";
 
     runTests("Data-Grid");
   </script>

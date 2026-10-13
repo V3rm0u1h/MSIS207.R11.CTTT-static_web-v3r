@@ -153,13 +153,17 @@ test("controller rejects bad input", () => {
 });
 
 test("announcements describe what changed and the row counts", () => {
-    const base = { sortKey: null, sortDirection: "none", filterText: "", visibleCount: 4, totalCount: 4 };
-    assertEqual(describeSnapshot({ ...base, lastChange: null }, columns), "4 of 4 rows shown.", "Initial");
+    const base = {
+        sortKey: null, sortDirection: "none", filterText: "", visibleCount: 4, totalCount: 4,
+        rows: rows, firstRowIndex: 0, page: 1, pageCount: 1, pageSize: 10
+    };
+    assertEqual(describeSnapshot({ ...base, lastChange: null }, columns), "Rows 1–4 of 4.", "Initial");
     assertEqual(describeSnapshot({ ...base, lastChange: "sort", sortKey: "salary", sortDirection: "descending" }, columns),
-        "Sorted by Salary, descending. 4 of 4 rows shown.", "Sorted");
-    assertEqual(describeSnapshot({ ...base, lastChange: "sort" }, columns), "Sorting cleared. 4 of 4 rows shown.", "Sort cleared");
-    assertEqual(describeSnapshot({ ...base, lastChange: "filter", filterText: " de ", visibleCount: 2 }, columns),
-        "Filtered by “de”. 2 of 4 rows shown.", "Filtered");
-    assertEqual(describeSnapshot({ ...base, lastChange: "filter" }, columns), "Filter cleared. 4 of 4 rows shown.", "Filter cleared");
-    assertEqual(describeSnapshot({ ...base, visibleCount: 1, totalCount: 1, lastChange: null }, columns), "1 of 1 row shown.", "Singular");
+        "Sorted by Salary, descending. Rows 1–4 of 4.", "Sorted");
+    assertEqual(describeSnapshot({ ...base, lastChange: "sort" }, columns), "Sorting cleared. Rows 1–4 of 4.", "Sort cleared");
+    assertEqual(describeSnapshot({ ...base, lastChange: "filter", filterText: " de ", visibleCount: 2, rows: rows.slice(0, 2) }, columns),
+        "Filtered by “de”. Rows 1–2 of 2, filtered from 4.", "Filtered");
+    assertEqual(describeSnapshot({ ...base, lastChange: "filter" }, columns), "Filter cleared. Rows 1–4 of 4.", "Filter cleared");
+    assertEqual(describeSnapshot({ ...base, visibleCount: 0, totalCount: 1, rows: [], lastChange: null }, columns),
+        "0 of 1 row shown.", "Singular, empty");
 });
