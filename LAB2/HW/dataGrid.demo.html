@@ -16,13 +16,13 @@
 <body>
 <main>
     <h1>Accessible Data-Grid</h1>
-    <p class="demo-intro">PRD 1: a native, screen-reader-friendly table with a contrast-checked theme. Sorting, filtering, pagination and keyboard navigation arrive in later commits.</p>
+    <p class="demo-intro">A native, screen-reader-friendly table with a contrast-checked theme (PRD 1), column sorting and text filtering (PRD 2). Pagination and arrow-key navigation arrive in later commits.</p>
     <!-- Unlabelled mount point: the grid supplies its own region label from the caption. -->
     <section id="grid-root"></section>
     <noscript>JavaScript must be enabled to render the data grid.</noscript>
 </main>
 <script type="module">
-    import { mountDataGrid } from "./dataGrid.js";
+    import { mountDataGrid } from "./mountDataGrid.js";
 
     const firstNames = ["An", "Binh", "Chi", "Dung", "Giang", "Hai", "Khanh", "Linh", "Minh", "Nam"];
     const lastNames = ["Nguyen", "Tran", "Le", "Pham", "Hoang"];

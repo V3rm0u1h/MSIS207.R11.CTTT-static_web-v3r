@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Accessible Data-Grid — PRD 1 Tests</title>
+  <title>Accessible Data-Grid — Tests</title>
   <link rel="stylesheet" href="dataGrid.css">
   <style>
     :root { color-scheme: light; font-family: system-ui, sans-serif; color: #182230; background: #f4f6fa; }
@@ -14,17 +14,25 @@
     li { margin: .45rem 0; }
     li[data-result="pass"] { color: #17663a; }
     li[data-result="fail"] { color: #b42318; }
+    #test-sandbox { margin-top: 1.5rem; }
   </style>
 </head>
 <body>
   <main>
-    <h1>Data-Grid PRD 1 Tests</h1>
-    <p>These checks render the grid into the real browser DOM and verify structure, type guards, XSS safety, formatting and theme contrast.</p>
+    <h1>Data-Grid Tests</h1>
+    <p>These checks render the grid into the real browser DOM. PRD 1 covers structure, type guards, XSS safety, formatting and theme contrast. PRD 2 covers sorting, filtering, focus and live-region announcements.</p>
     <p id="test-summary" role="status" aria-live="polite">Running tests…</p>
     <ul id="test-results" aria-label="Test results"></ul>
-    <section id="test-sandbox" hidden></section>
+    <section id="test-sandbox" aria-label="Test sandbox"></section>
     <noscript>JavaScript must be enabled to run these tests.</noscript>
   </main>
-  <script type="module" src="./dataGrid.test.js"></script>
+  <script type="module">
+    import { runTests } from "./testHarness.js";
+    import "./dataGrid.test.js";
+    import "./gridModel.test.js";
+    import "./mountDataGrid.test.js";
+
+    runTests("Data-Grid");
+  </script>
 </body>
 </html>

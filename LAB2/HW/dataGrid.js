@@ -1,15 +1,20 @@
 /**
- * Accessible Data-Grid — PRD 1: Semantic table and accessible theme
+ * Accessible Data-Grid — view layer
  *
- * Renders an array of rows as a native <table> through the Mini-React core.
- * Inputs are validated before any VNode is created, and every cell value is
- * rendered as a text node; HTML strings are never parsed.
+ * PRD 1: renders an array of rows as a native <table> through the Mini-React
+ * core. Inputs are validated before any VNode is created, and every cell value
+ * is rendered as a text node; HTML strings are never parsed.
+ * PRD 2: sortable columns render a native <button> inside their <th>, and the
+ * active column exposes its direction through aria-sort.
+ *
+ * This module is pure: it builds VNodes and never touches the DOM. Mounting
+ * and state live in mountDataGrid.js and gridModel.js.
  */
 
 import { createElement } from "./createElement.js";
-import { mountVNode } from "./renderToDOM.js";
 
 export const COLUMN_TYPES = Object.freeze(["string", "number", "date"]);
+export const SORT_DIRECTIONS = Object.freeze(["none", "ascending", "descending"]);
 export const DEFAULT_EMPTY_MESSAGE = "No rows to display";
 
 const COLUMN_PROPERTIES = new Set(["key", "label", "type", "sortable", "filterable"]);
@@ -110,6 +115,34 @@ export function validateRows(rows, columns) {
     return rows;
 }
 
+export function validateLocale(locale) {
+    if (locale !== undefined && !isNonEmptyString(locale)) {
+        throw new TypeError("Data-Grid: locale must be a non-empty string when provided.");
+    }
+    return locale;
+}
+
+function validateSortProps(props) {
+    const { sortKey = null, sortDirection = "none", onSort } = props;
+
+    if (!SORT_DIRECTIONS.includes(sortDirection)) {
+        throw new TypeError(`Data-Grid: sortDirection must be one of ${SORT_DIRECTIONS.join(", ")}.`);
+    }
+    if (sortKey !== null) {
+        const column = props.columns.find((candidate) => candidate.key === sortKey);
+        if (!column || column.sortable !== true) {
+            throw new TypeError(`Data-Grid: sortKey "${String(sortKey)}" is not a sortable column.`);
+        }
+    }
+    if ((sortKey === null) !== (sortDirection === "none")) {
+        throw new TypeError("Data-Grid: sortKey and sortDirection must be set together.");
+    }
+    if (onSort !== undefined && typeof onSort !== "function") {
+        throw new TypeError("Data-Grid: onSort must be a function when provided.");
+    }
+    return { sortKey, sortDirection, onSort };
+}
+
 function validateGridProps(props) {
     if (!isPlainObject(props)) {
         throw new TypeError("Data-Grid: props must be a plain object.");
@@ -122,16 +155,17 @@ function validateGridProps(props) {
     if (!isNonEmptyString(caption)) {
         throw new TypeError("Data-Grid: caption must be a non-empty string.");
     }
-    if (locale !== undefined && !isNonEmptyString(locale)) {
-        throw new TypeError("Data-Grid: locale must be a non-empty string when provided.");
-    }
+    validateLocale(locale);
     if (!isNonEmptyString(emptyMessage)) {
         throw new TypeError("Data-Grid: emptyMessage must be a non-empty string.");
     }
     validateColumns(props.columns);
     validateRows(props.rows, props.columns);
 
-    return { id, caption, locale, emptyMessage, columns: props.columns, rows: props.rows };
+    return {
+        id, caption, locale, emptyMessage, columns: props.columns, rows: props.rows,
+        ...validateSortProps(props)
+    };
 }
 
 export function createFormatters(locale) {
@@ -145,19 +179,47 @@ function cellClassName(column) {
     return `data-grid__cell data-grid__cell--${column.type}`;
 }
 
-function renderCellContent(value, column, formatters) {
+/** The text a cell shows. Also used by the filter, so users match what they see. */
+export function formatCellText(value, column, formatters) {
     if (value === null || value === undefined) return "";
     if (column.type === "number") return formatters.number.format(value);
-    if (column.type === "date") {
-        return createElement("time", { datetime: value }, formatters.date.format(parseIsoDate(value)));
-    }
+    if (column.type === "date") return formatters.date.format(parseIsoDate(value));
     return value;
 }
 
-function renderHeaderRow(columns) {
-    return createElement("tr", null,
-        columns.map((column) => createElement("th", { scope: "col", className: cellClassName(column) }, column.label))
+function renderCellContent(value, column, formatters) {
+    const text = formatCellText(value, column, formatters);
+    if (column.type === "date" && text !== "") {
+        return createElement("time", { datetime: value }, text);
+    }
+    return text;
+}
+
+function renderHeaderCell(column, sort) {
+    const className = cellClassName(column);
+    if (column.sortable !== true || !sort.onSort) {
+        return createElement("th", { scope: "col", className }, column.label);
+    }
+
+    // Only the active column carries aria-sort; the direction icon is CSS-only,
+    // so the button's accessible name stays the plain column label.
+    const isActive = sort.sortKey === column.key;
+    return createElement("th", {
+        scope: "col",
+        className: `${className} data-grid__cell--sortable`,
+        "aria-sort": isActive ? sort.sortDirection : null
+    },
+        createElement("button", {
+            type: "button",
+            className: "data-grid__sort",
+            "data-sort-key": column.key,
+            onClick: () => sort.onSort(column.key)
+        }, column.label)
     );
+}
+
+function renderHeaderRow(columns, sort) {
+    return createElement("tr", null, columns.map((column) => renderHeaderCell(column, sort)));
 }
 
 function renderBodyRow(row, columns, formatters) {
@@ -180,7 +242,7 @@ function renderEmptyRow(columns, message) {
 
 /** Build the Data-Grid VNode tree. Throws TypeError before building anything if props are invalid. */
 export function DataGrid(props) {
-    const { id, caption, locale, emptyMessage, columns, rows } = validateGridProps(props);
+    const { id, caption, locale, emptyMessage, columns, rows, ...sort } = validateGridProps(props);
     const formatters = createFormatters(locale);
     const captionId = `${id}-caption`;
 
@@ -189,7 +251,7 @@ export function DataGrid(props) {
     return createElement("section", { id, className: "data-grid", "aria-labelledby": captionId, tabindex: 0 },
         createElement("table", { className: "data-grid__table" },
             createElement("caption", { id: captionId, className: "data-grid__caption" }, caption),
-            createElement("thead", null, renderHeaderRow(columns)),
+            createElement("thead", null, renderHeaderRow(columns, sort)),
             createElement("tbody", null,
                 rows.length === 0
                     ? renderEmptyRow(columns, emptyMessage)
@@ -197,9 +259,4 @@ export function DataGrid(props) {
             )
         )
     );
-}
-
-/** Validate, render and mount a Data-Grid into root. Root is untouched if validation fails. */
-export function mountDataGrid(root, props) {
-    return mountVNode(root, DataGrid(props));
 }

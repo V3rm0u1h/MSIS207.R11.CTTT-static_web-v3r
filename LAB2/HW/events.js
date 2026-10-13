@@ -1,11 +1,11 @@
 /**
  * Mini-React root event delegation.
- * Supported native events: click, submit.
+ * Supported native events: click, submit, input.
  * Child elements hold trusted callback references in a WeakMap; native
  * listeners are attached to the stable root only.
  */
 
-const SUPPORTED_EVENT_TYPES = new Set(["click", "submit"]);
+const SUPPORTED_EVENT_TYPES = new Set(["click", "submit", "input"]);
 const handlerRegistry = new WeakMap();
 const rootRegistrations = new WeakMap();
 
@@ -81,7 +81,7 @@ function dispatchDelegatedEvent(event, root, eventType) {
     match.callback.call(match.element, event);
 }
 
-export function attachRootEventDelegation(root, eventTypes = ["click", "submit"]) {
+export function attachRootEventDelegation(root, eventTypes = ["click", "submit", "input"]) {
     if (!isElement(root) || typeof root.addEventListener !== "function" ||
         typeof root.contains !== "function") {
         throw new TypeError("Mini-React: root must be a valid DOM element.");
@@ -106,4 +106,4 @@ export function attachRootEventDelegation(root, eventTypes = ["click", "submit"]
     }
 }
 
-export const supportedDelegatedEvents = Object.freeze(["click", "submit"]);
+export const supportedDelegatedEvents = Object.freeze(["click", "submit", "input"]);

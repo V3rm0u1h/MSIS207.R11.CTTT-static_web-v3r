@@ -25,7 +25,9 @@ const BOOLEAN_ATTRIBUTES = new Set([
 ]);
 const EVENT_PROP_TO_TYPE = Object.freeze({
     onClick: "click",
-    onSubmit: "submit"
+    onSubmit: "submit",
+    // Filter field (HW PRD 2).
+    onInput: "input"
 });
 const RESERVED_PROPS = new Set([
     "children", "key", "ref", "dangerouslySetInnerHTML", "innerHTML", "outerHTML"
@@ -112,7 +114,7 @@ function applyProps(element, props, path) {
         }
 
         if (/^on/i.test(name)) {
-            throw new TypeError(`Mini-React: unsupported event prop "${name}" at ${path}; only onClick and onSubmit are supported.`);
+            throw new TypeError(`Mini-React: unsupported event prop "${name}" at ${path}; only onClick, onSubmit and onInput are supported.`);
         }
 
         if (/^aria-[a-z0-9-]+$/.test(name) || /^data-[a-z0-9-]+$/.test(name)) {

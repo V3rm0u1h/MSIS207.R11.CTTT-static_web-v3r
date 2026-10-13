@@ -84,3 +84,89 @@
     font-style: italic;
     text-align: center;
 }
+
+/* --- PRD 2: sortable headers --------------------------------------------- */
+
+.data-grid__sort {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    min-height: 1.5rem; /* WCAG 2.5.8: at least 24 x 24 px target */
+    margin: -0.25rem -0.375rem;
+    padding: 0.25rem 0.375rem;
+    border: 0;
+    border-radius: 0.25rem;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: inherit;
+    cursor: pointer;
+}
+
+.data-grid__sort:hover {
+    text-decoration: underline;
+    text-underline-offset: 0.2em;
+}
+
+.data-grid__sort:focus-visible {
+    outline: 2px solid var(--grid-focus);
+    outline-offset: 2px;
+}
+
+/* Direction icon: CSS-generated with empty alt text ("/ ''") so it never
+ * changes the button's accessible name. aria-sort carries the meaning. */
+.data-grid__sort::after {
+    content: "\2195" / "";
+    color: var(--grid-muted);
+    font-size: 0.875em;
+}
+
+[aria-sort="ascending"] > .data-grid__sort::after {
+    content: "\25B2" / "";
+    color: inherit;
+}
+
+[aria-sort="descending"] > .data-grid__sort::after {
+    content: "\25BC" / "";
+    color: inherit;
+}
+
+/* --- PRD 2: filter field and status --------------------------------------- */
+
+.data-grid-filter {
+    display: grid;
+    gap: 0.375rem;
+    max-width: 24rem;
+    margin: 0 0 0.75rem;
+}
+
+.data-grid-filter__label {
+    font-weight: 700;
+}
+
+.data-grid-filter__input {
+    box-sizing: border-box;
+    min-height: 2.75rem;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--grid-border);
+    border-radius: 0.375rem;
+    background: var(--grid-surface);
+    color: var(--grid-text);
+    font: inherit;
+}
+
+.data-grid-filter__input:focus-visible {
+    outline: 2px solid var(--grid-focus);
+    outline-offset: 2px;
+}
+
+.data-grid-filter__hint,
+.data-grid__status {
+    margin: 0;
+    color: var(--grid-muted);
+    font-size: 0.9375rem;
+}
+
+.data-grid__status {
+    margin-bottom: 0.75rem;
+}

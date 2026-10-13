@@ -1,21 +1,9 @@
-import { DataGrid, mountDataGrid, parseIsoDate, DEFAULT_EMPTY_MESSAGE } from "./dataGrid.js";
+import { DataGrid, parseIsoDate, DEFAULT_EMPTY_MESSAGE } from "./dataGrid.js";
+import { renderToDOM } from "./renderToDOM.js";
+import { mountDataGrid } from "./mountDataGrid.js";
+import { test, assert, assertEqual, assertThrowsType, sandbox } from "./testHarness.js";
 
-const resultsElement = document.querySelector("#test-results");
-const summaryElement = document.querySelector("#test-summary");
-const sandbox = document.querySelector("#test-sandbox");
-
-const tests = [];
-function test(name, callback) { tests.push({ name, callback }); }
-function assert(condition, message) { if (!condition) throw new Error(message || "Assertion failed"); }
-function assertEqual(actual, expected, message) {
-    if (actual !== expected) throw new Error(`${message || "Values differ"}: expected ${String(expected)}, received ${String(actual)}`);
-}
-function assertThrowsType(callback, pattern) {
-    let error;
-    try { callback(); } catch (caught) { error = caught; }
-    assert(error instanceof TypeError, "Expected a TypeError to be thrown");
-    if (pattern) assert(pattern.test(error.message), `Unexpected error message: ${error.message}`);
-}
+// PRD 1 — semantic table and accessible theme.
 
 const columns = [
     { key: "name", label: "Name", type: "string", sortable: true, filterable: true },
@@ -28,10 +16,9 @@ const rows = [
 ];
 
 function mount(overrides = {}) {
-    const root = document.createElement("section");
-    sandbox.append(root);
-    const grid = mountDataGrid(root, { caption: "Employees", locale: "en-US", columns, rows, ...overrides });
-    return { root, grid };
+    const grid = renderToDOM(DataGrid({ caption: "Employees", locale: "en-US", columns, rows, ...overrides }));
+    sandbox().append(grid);
+    return { grid };
 }
 
 test("renders section > table with caption, thead and tbody", () => {
@@ -233,24 +220,3 @@ test("border and focus tokens meet 3:1 on every background", () => {
         }
     }
 });
-
-let failures = 0;
-for (const { name, callback } of tests) {
-    let passed = true;
-    let detail = "";
-    try {
-        callback();
-    } catch (error) {
-        passed = false;
-        failures += 1;
-        detail = ` — ${error.message}`;
-    }
-    const item = document.createElement("li");
-    item.dataset.result = passed ? "pass" : "fail";
-    item.textContent = `${passed ? "PASS" : "FAIL"}: ${name}${detail}`;
-    resultsElement.append(item);
-    (passed ? console.log : console.error)(item.textContent);
-}
-sandbox.replaceChildren();
-summaryElement.textContent = `${tests.length - failures}/${tests.length} Data-Grid PRD 1 tests passed.`;
-summaryElement.dataset.result = failures === 0 ? "pass" : "fail";
