@@ -1,0 +1,86 @@
+/* Accessible Data-Grid — theme tokens and table presentation (PRD 1)
+ *
+ * Contrast ratios below use the WCAG 2.x relative-luminance formula.
+ * Targets: text >= 4.5:1 (1.4.3), borders and focus ring >= 3:1 (1.4.11).
+ *
+ * | Token           | on surface | on header-bg | on zebra-bg |
+ * | --------------- | ---------- | ------------ | ----------- |
+ * | --grid-text     | 15.96:1    | 13.57:1      | 14.75:1     |
+ * | --grid-muted    |  7.69:1    |  6.53:1      |  7.10:1     |
+ * | --grid-border   |  4.83:1    |  4.11:1      |  4.47:1     |
+ * | --grid-focus    |  6.70:1    |  5.70:1      |  6.19:1     |
+ */
+:root {
+    --grid-text: #1a2230;
+    --grid-muted: #475467;
+    --grid-surface: #ffffff;
+    --grid-header-bg: #e8edf4;
+    --grid-zebra-bg: #f4f6f9;
+    --grid-border: #6b7280;
+    --grid-focus: #1d4ed8;
+}
+
+.data-grid {
+    box-sizing: border-box;
+    max-width: 100%;
+    overflow-x: auto;
+    border: 1px solid var(--grid-border);
+    border-radius: 0.5rem;
+    background: var(--grid-surface);
+    color: var(--grid-text);
+}
+
+.data-grid:focus-visible {
+    outline: 2px solid var(--grid-focus);
+    outline-offset: 2px;
+}
+
+.data-grid__table {
+    width: 100%;
+    border-collapse: collapse;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.4;
+}
+
+.data-grid__caption {
+    caption-side: top;
+    padding: 0.75rem 1rem;
+    font-size: 1.125rem;
+    font-weight: 700;
+    text-align: start;
+}
+
+.data-grid__cell,
+.data-grid__empty {
+    padding: 0.625rem 1rem;
+    border-top: 1px solid var(--grid-border);
+    text-align: start;
+    vertical-align: top;
+}
+
+.data-grid__cell {
+    white-space: nowrap;
+}
+
+.data-grid thead .data-grid__cell {
+    background: var(--grid-header-bg);
+    font-weight: 700;
+}
+
+.data-grid tbody tr:nth-child(even) {
+    background: var(--grid-zebra-bg);
+}
+
+.data-grid tbody th.data-grid__cell {
+    font-weight: 600;
+}
+
+.data-grid__cell--number {
+    text-align: end;
+}
+
+.data-grid__empty {
+    color: var(--grid-muted);
+    font-style: italic;
+    text-align: center;
+}

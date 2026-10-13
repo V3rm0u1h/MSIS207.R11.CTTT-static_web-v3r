@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Accessible Data-Grid — PRD 1 Tests</title>
+  <link rel="stylesheet" href="dataGrid.css">
+  <style>
+    :root { color-scheme: light; font-family: system-ui, sans-serif; color: #182230; background: #f4f6fa; }
+    body { max-width: 760px; margin: 0 auto; padding: 2rem 1rem; }
+    main { padding: 1.5rem; background: #fff; border: 1px solid #d9e0e9; border-radius: 12px; }
+    h1 { margin-top: 0; }
+    #test-summary { font-weight: 700; }
+    li { margin: .45rem 0; }
+    li[data-result="pass"] { color: #17663a; }
+    li[data-result="fail"] { color: #b42318; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Data-Grid PRD 1 Tests</h1>
+    <p>These checks render the grid into the real browser DOM and verify structure, type guards, XSS safety, formatting and theme contrast.</p>
+    <p id="test-summary" role="status" aria-live="polite">Running tests…</p>
+    <ul id="test-results" aria-label="Test results"></ul>
+    <section id="test-sandbox" hidden></section>
+    <noscript>JavaScript must be enabled to run these tests.</noscript>
+  </main>
+  <script type="module" src="./dataGrid.test.js"></script>
+</body>
+</html>

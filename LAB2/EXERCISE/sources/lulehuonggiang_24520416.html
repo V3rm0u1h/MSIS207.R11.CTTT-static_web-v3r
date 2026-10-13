@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>lulehuonggiang_24520416.md</title>
+<meta http-equiv="Content-type" content="text/html;charset=UTF-8">
+
+<style>
+/* https://github.com/microsoft/vscode/blob/master/extensions/markdown-language-features/media/markdown.css */
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+body {
+	font-family: var(--vscode-markdown-font-family, -apple-system, BlinkMacSystemFont, "Segoe WPC", "Segoe UI", "Ubuntu", "Droid Sans", sans-serif);
+	font-size: var(--vscode-markdown-font-size, 14px);
+	padding: 0 26px;
+	line-height: var(--vscode-markdown-line-height, 22px);
+	word-wrap: break-word;
+}
+
+#code-csp-warning {
+	position: fixed;
+	top: 0;
+	right: 0;
+	color: white;
+	margin: 16px;
+	text-align: center;
+	font-size: 12px;
+	font-family: sans-serif;
+	background-color:#444444;
+	cursor: pointer;
+	padding: 6px;
+	box-shadow: 1px 1px 1px rgba(0,0,0,.25);
+}
+
+#code-csp-warning:hover {
+	text-decoration: none;
+	background-color:#007acc;
+	box-shadow: 2px 2px 2px rgba(0,0,0,.25);
+}
+
+body.scrollBeyondLastLine {
+	margin-bottom: calc(100vh - 22px);
+}
+
+body.showEditorSelection .code-line {
+	position: relative;
+}
+
+body.showEditorSelection .code-active-line:before,
+body.showEditorSelection .code-line:hover:before {
+	content: "";
+	display: block;
+	position: absolute;
+	top: 0;
+	left: -12px;
+	height: 100%;
+}
+
+body.showEditorSelection li.code-active-line:before,
+body.showEditorSelection li.code-line:hover:before {
+	left: -30px;
+}
+
+.vscode-light.showEditorSelection .code-active-line:before {
+	border-left: 3px solid rgba(0, 0, 0, 0.15);
+}
+
+.vscode-light.showEditorSelection .code-line:hover:before {
+	border-left: 3px solid rgba(0, 0, 0, 0.40);
+}
+
+.vscode-light.showEditorSelection .code-line .code-line:hover:before {
+	border-left: none;
+}
+
+.vscode-dark.showEditorSelection .code-active-line:before {
+	border-left: 3px solid rgba(255, 255, 255, 0.4);
+}
+
+.vscode-dark.showEditorSelection .code-line:hover:before {
+	border-left: 3px solid rgba(255, 255, 255, 0.60);
+}
+
+.vscode-dark.showEditorSelection .code-line .code-line:hover:before {
+	border-left: none;
+}
+
+.vscode-high-contrast.showEditorSelection .code-active-line:before {
+	border-left: 3px solid rgba(255, 160, 0, 0.7);
+}
+
+.vscode-high-contrast.showEditorSelection .code-line:hover:before {
+	border-left: 3px solid rgba(255, 160, 0, 1);
+}
+
+.vscode-high-contrast.showEditorSelection .code-line .code-line:hover:before {
+	border-left: none;
+}
+
+img {
+	max-width: 100%;
+	max-height: 100%;
+}
+
+a {
+	text-decoration: none;
+}
+
+a:hover {
+	text-decoration: underline;
+}
+
+a:focus,
+input:focus,
+select:focus,
+textarea:focus {
+	outline: 1px solid -webkit-focus-ring-color;
+	outline-offset: -1px;
+}
+
+hr {
+	border: 0;
+	height: 2px;
+	border-bottom: 2px solid;
+}
+
+h1 {
+	padding-bottom: 0.3em;
+	line-height: 1.2;
+	border-bottom-width: 1px;
+	border-bottom-style: solid;
+}
+
+h1, h2, h3 {
+	font-weight: normal;
+}
+
+table {
+	border-collapse: collapse;
+}
+
+table > thead > tr > th {
+	text-align: left;
+	border-bottom: 1px solid;
+}
+
+table > thead > tr > th,
+table > thead > tr > td,
+table > tbody > tr > th,
+table > tbody > tr > td {
+	padding: 5px 10px;
+}
+
+table > tbody > tr + tr > td {
+	border-top: 1px solid;
+}
+
+blockquote {
+	margin: 0 7px 0 5px;
+	padding: 0 16px 0 10px;
+	border-left-width: 5px;
+	border-left-style: solid;
+}
+
+code {
+	font-family: Menlo, Monaco, Consolas, "Droid Sans Mono", "Courier New", monospace, "Droid Sans Fallback";
+	font-size: 1em;
+	line-height: 1.357em;
+}
+
+body.wordWrap pre {
+	white-space: pre-wrap;
+}
+
+pre:not(.hljs),
+pre.hljs code > div {
+	padding: 16px;
+	border-radius: 3px;
+	overflow: auto;
+}
+
+pre code {
+	color: var(--vscode-editor-foreground);
+	tab-size: 4;
+}
+
+/** Theming */
+
+.vscode-light pre {
+	background-color: rgba(220, 220, 220, 0.4);
+}
+
+.vscode-dark pre {
+	background-color: rgba(10, 10, 10, 0.4);
+}
+
+.vscode-high-contrast pre {
+	background-color: rgb(0, 0, 0);
+}
+
+.vscode-high-contrast h1 {
+	border-color: rgb(0, 0, 0);
+}
+
+.vscode-light table > thead > tr > th {
+	border-color: rgba(0, 0, 0, 0.69);
+}
+
+.vscode-dark table > thead > tr > th {
+	border-color: rgba(255, 255, 255, 0.69);
+}
+
+.vscode-light h1,
+.vscode-light hr,
+.vscode-light table > tbody > tr + tr > td {
+	border-color: rgba(0, 0, 0, 0.18);
+}
+
+.vscode-dark h1,
+.vscode-dark hr,
+.vscode-dark table > tbody > tr + tr > td {
+	border-color: rgba(255, 255, 255, 0.18);
+}
+
+</style>
+
+<style>
+/* Tomorrow Theme */
+/* http://jmblog.github.com/color-themes-for-google-code-highlightjs */
+/* Original theme - https://github.com/chriskempson/tomorrow-theme */
+
+/* Tomorrow Comment */
+.hljs-comment,
+.hljs-quote {
+	color: #8e908c;
+}
+
+/* Tomorrow Red */
+.hljs-variable,
+.hljs-template-variable,
+.hljs-tag,
+.hljs-name,
+.hljs-selector-id,
+.hljs-selector-class,
+.hljs-regexp,
+.hljs-deletion {
+	color: #c82829;
+}
+
+/* Tomorrow Orange */
+.hljs-number,
+.hljs-built_in,
+.hljs-builtin-name,
+.hljs-literal,
+.hljs-type,
+.hljs-params,
+.hljs-meta,
+.hljs-link {
+	color: #f5871f;
+}
+
+/* Tomorrow Yellow */
+.hljs-attribute {
+	color: #eab700;
+}
+
+/* Tomorrow Green */
+.hljs-string,
+.hljs-symbol,
+.hljs-bullet,
+.hljs-addition {
+	color: #718c00;
+}
+
+/* Tomorrow Blue */
+.hljs-title,
+.hljs-section {
+	color: #4271ae;
+}
+
+/* Tomorrow Purple */
+.hljs-keyword,
+.hljs-selector-tag {
+	color: #8959a8;
+}
+
+.hljs {
+	display: block;
+	overflow-x: auto;
+	color: #4d4d4c;
+	padding: 0.5em;
+}
+
+.hljs-emphasis {
+	font-style: italic;
+}
+
+.hljs-strong {
+	font-weight: bold;
+}
+</style>
+
+<style>
+/*
+ * Markdown PDF CSS
+ */
+
+ body {
+	font-family: -apple-system, BlinkMacSystemFont, "Segoe WPC", "Segoe UI", "Ubuntu", "Droid Sans", sans-serif, "Meiryo";
+	padding: 0 12px;
+}
+
+pre {
+	background-color: #f8f8f8;
+	border: 1px solid #cccccc;
+	border-radius: 3px;
+	overflow-x: auto;
+	white-space: pre-wrap;
+	overflow-wrap: break-word;
+}
+
+pre:not(.hljs) {
+	padding: 23px;
+	line-height: 19px;
+}
+
+blockquote {
+	background: rgba(127, 127, 127, 0.1);
+	border-color: rgba(0, 122, 204, 0.5);
+}
+
+.emoji {
+	height: 1.4em;
+}
+
+code {
+	font-size: 14px;
+	line-height: 19px;
+}
+
+/* for inline code */
+:not(pre):not(.hljs) > code {
+	color: #C9AE75; /* Change the old color so it seems less like an error */
+	font-size: inherit;
+}
+
+/* Page Break : use <div class="page"/> or <div class="page"></div> to insert page break
+-------------------------------------------------------- */
+.page {
+	page-break-after: always;
+}
+
+</style>
+
+<script src="https://unpkg.com/mermaid/dist/mermaid.min.js"></script>
+</head>
+<body>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: document.body.classList.contains('vscode-dark') || document.body.classList.contains('vscode-high-contrast')
+          ? 'dark'
+          : 'default'
+    });
+  </script>
+<h1 id="project_reportmd">PROJECT_REPORT.md</h1>
+<h1 id="mini-react-a-lightweight-reactive-ui-framework">Mini-React: A Lightweight Reactive UI Framework</h1>
+<h2 id="1-project-overview">1. Project Overview</h2>
+<p>| GitHub Repository      | <a href="https://github.com/V3rm0u1h/MSIS207.R11.CTTT-static_web-v3r.git">MSIS207.R11.CTTT-static_web-v3r</a> |
+| ChatGPT Conversation 1 | <a href="hhttps://chatgpt.com/share/6aca6d1c-4c10-83ec-85ed-8961fb4b8667">View chat</a></p>
+<h3 id="11-objective">1.1 Objective</h3>
+<p>The objective of this project is to build a lightweight UI framework from scratch using vanilla JavaScript. The project explores how core frontend framework concepts work internally, including Virtual DOM creation, DOM rendering, state management, event delegation, and asynchronous UI updates.</p>
+<p>Rather than relying on React or another UI framework, Mini-React implements its own foundational mechanisms and uses them to build reactive user interfaces.</p>
+<h3 id="12-project-scope">1.2 Project Scope</h3>
+<p>The project includes the following features:</p>
+<ul>
+<li>Virtual DOM node creation through <code>createElement()</code> and <code>createTextElement()</code>.</li>
+<li>Recursive rendering of VNodes into real DOM nodes through <code>renderToDOM()</code>.</li>
+<li>State management and reactive state updates.</li>
+<li>Root-level event delegation.</li>
+<li>A reactive Task Manager application.</li>
+<li>A resilient asynchronous data component with loading, success, error, and retry behavior.</li>
+<li>Automated testing, accessibility checks, and security verification.</li>
+</ul>
+<h3 id="13-technologies-used">1.3 Technologies Used</h3>
+<ul>
+<li>HTML5</li>
+<li>CSS3</li>
+<li>JavaScript ES Modules</li>
+<li>Node.js for automated tests</li>
+<li>Git and GitHub for version control</li>
+<li>Chrome DevTools for DOM inspection and browser verification</li>
+</ul>
+<h2 id="2-system-architecture">2. System Architecture</h2>
+<p>Mini-React is organized into separate modules, each responsible for a specific part of the UI lifecycle.</p>
+<table>
+<thead>
+<tr>
+<th>Module</th>
+<th>Responsibility</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>createElement.js</code></td>
+<td>Creates structured Virtual DOM nodes.</td>
+</tr>
+<tr>
+<td><code>renderToDOM.js</code></td>
+<td>Converts VNodes into real DOM elements and text nodes.</td>
+</tr>
+<tr>
+<td><code>state.js</code></td>
+<td>Provides the state storage and update mechanism.</td>
+</tr>
+<tr>
+<td><code>useState.js</code></td>
+<td>Provides reactive state access where supported by the existing state engine.</td>
+</tr>
+<tr>
+<td><code>events.js</code></td>
+<td>Manages delegated event handling.</td>
+</tr>
+<tr>
+<td><code>app.js</code></td>
+<td>Implements the Task Manager application.</td>
+</tr>
+<tr>
+<td><code>asyncDataComponent.js</code></td>
+<td>Implements the asynchronous data state machine, request handling, and UI.</td>
+</tr>
+<tr>
+<td><code>asyncDataComponent.css</code></td>
+<td>Defines the skeleton animation and component styling.</td>
+</tr>
+</tbody>
+</table>
+<p>The asynchronous component reuses the existing Virtual DOM factory, renderer, and event-handling architecture instead of introducing another rendering system.</p>
+<h3 id="figure-1--project-architecture">Figure 1 — Project architecture</h3>
+<p><img src="image.png" alt="alt text"></p>
+<h2 id="3-implementation-milestones">3. Implementation Milestones</h2>
+<h3 id="31-virtual-dom-factory">3.1 Virtual DOM Factory</h3>
+<p>The <code>createElement()</code> factory converts element descriptions into a consistent VNode structure containing a type, props object, and children array.</p>
+<p>Text values are converted into text VNodes. Nested child arrays are flattened, while valid VNodes are preserved. Null, undefined, and boolean children are ignored according to the factory contract.</p>
+<p>The factory creates data structures only; it does not directly create browser DOM nodes.</p>
+<h3 id="32-recursive-dom-renderer">3.2 Recursive DOM Renderer</h3>
+<p>The <code>renderToDOM()</code> function converts the VNode tree into real DOM nodes.</p>
+<p>The renderer:</p>
+<ul>
+<li>Validates the VNode structure.</li>
+<li>Creates text nodes using <code>document.createTextNode()</code>.</li>
+<li>Creates semantic elements using <code>document.createElement()</code>.</li>
+<li>Applies explicitly supported properties and attributes.</li>
+<li>Recursively renders children in the correct order.</li>
+<li>Preserves the original VNode tree.</li>
+<li>Supports integration with the existing event delegation mechanism.</li>
+</ul>
+<h3 id="33-state-management-and-event-delegation">3.3 State Management and Event Delegation</h3>
+<p>The state engine provides the foundation for reactive UI updates. The event delegation module allows supported event handlers to be managed through the existing event architecture instead of attaching separate native listeners to every child.</p>
+<p>These mechanisms are reused by the application and the asynchronous data component where their established contracts permit.</p>
+<h3 id="34-reactive-task-manager">3.4 Reactive Task Manager</h3>
+<p>The Task Manager demonstrates how the framework's state and event mechanisms can support a functional user interface.</p>
+<p>The application supports task creation, completion, deletion, and filtering by All, Active, and Completed status. The interface updates in response to user interactions.</p>
+<h3 id="35-resilient-asynchronous-data-component">3.5 Resilient Asynchronous Data Component</h3>
+<p>The asynchronous component manages data requests using exactly four UI states:</p>
+<ul>
+<li><code>IDLE</code>: The component is ready to request data.</li>
+<li><code>LOADING</code>: The request is in progress and a skeleton is displayed.</li>
+<li><code>SUCCESS</code>: Validated response data is displayed.</li>
+<li><code>ERROR</code>: A human-readable error message and retry action are displayed.</li>
+</ul>
+<p>A central transition mechanism validates state changes. Each request receives a monotonically increasing identifier so that outdated responses cannot overwrite the result of a newer request.</p>
+<p>The component also supports request cancellation where possible and invalidates outstanding work during disposal. Cancellation is not relied upon as the only protection against stale responses.</p>
+<p>The response is validated before its fields are used. Empty valid responses are handled separately from malformed data.</p>
+<h2 id="4-security-and-safe-rendering">4. Security and Safe Rendering</h2>
+<p>Security is an important part of the Mini-React implementation.</p>
+<h3 id="41-safe-text-rendering">4.1 Safe Text Rendering</h3>
+<p>Text values are rendered through text nodes instead of being parsed as HTML. The implementation does not use <code>innerHTML</code> to render untrusted response content.</p>
+<p>For the security test, use the following literal string:</p>
+<p><code>&lt;script&gt;alert(1)&lt;/script&gt;</code></p>
+<p>Expected result:</p>
+<ul>
+<li>The string is displayed literally.</li>
+<li>No script element is created from the string.</li>
+<li>The JavaScript contained in the string does not execute.</li>
+</ul>
+<h3 id="42-input-and-response-validation">4.2 Input and Response Validation</h3>
+<p>The VNode factory and renderer validate their inputs before creating DOM nodes. The asynchronous component validates response data before using its fields.</p>
+<p>The component also avoids exposing stack traces or sensitive implementation details in user-facing error messages.</p>
+<h2 id="5-automated-testing">5. Automated Testing</h2>
+<p>Automated tests are used to verify the Virtual DOM factory, renderer, and asynchronous component independently.</p>
+<h3 id="51-virtual-dom-factory-tests">5.1 Virtual DOM Factory Tests</h3>
+<p>The factory tests cover:</p>
+<ul>
+<li>VNode structure and nested hierarchy.</li>
+<li>Props and children normalization.</li>
+<li>Recursive child-array flattening.</li>
+<li>Numeric zero and empty-string handling.</li>
+<li>Invalid element types and malformed children.</li>
+<li>Literal handling of HTML-like text.</li>
+</ul>
+<p>Recorded result: <strong>18/18 tests passed.</strong></p>
+<h3 id="52-renderer-tests">5.2 Renderer Tests</h3>
+<p>The renderer tests cover:</p>
+<ul>
+<li>Recursive element creation.</li>
+<li>Text-node rendering.</li>
+<li>Supported attributes and boolean properties.</li>
+<li>Invalid VNode rejection.</li>
+<li>Safe text rendering.</li>
+<li>Root mounting and event compatibility.</li>
+</ul>
+<p>Recorded result: <strong>12/12 tests passed.</strong></p>
+<h3 id="53-asynchronous-component-tests">5.3 Asynchronous Component Tests</h3>
+<p>The asynchronous component tests cover:</p>
+<ul>
+<li>Valid and invalid state transitions.</li>
+<li>Successful, failed, and empty responses.</li>
+<li>Stale-response protection.</li>
+<li>Stale rejection handling.</li>
+<li>Retry recovery.</li>
+<li>Cleanup and disposal.</li>
+<li>Safe handling of HTML-like strings.</li>
+</ul>
+<p>Recorded result: <strong>10/10 tests passed.</strong></p>
+<h3 id="54-test-execution">5.4 Test Execution</h3>
+<p>Run the following commands from the project root:</p>
+<pre class="hljs"><code><div>node --experimental-default-type=module createElement.test.js
+
+node --experimental-default-type=module renderToDOM.test.js
+
+node --experimental-default-type=module asyncDataComponent.test.js
+</div></code></pre>
+<p>The recorded combined result is <strong>40/40 automated tests passed</strong>.</p>
+<h2 id="6-accessibility">6. Accessibility</h2>
+<p>The implementation considers accessibility in both the semantic DOM structure and the asynchronous component.</p>
+<p>The component provides:</p>
+<ul>
+<li>Semantic HTML elements.</li>
+<li>A status region for loading feedback.</li>
+<li>An alert region for errors.</li>
+<li>A clearly named, keyboard-accessible retry button.</li>
+<li>Visible keyboard focus indicators.</li>
+<li>Decorative skeleton elements hidden from assistive technology.</li>
+<li>Reduced-motion support for users who prefer less animation.</li>
+</ul>
+<h2 id="7-performance-and-reliability">7. Performance and Reliability</h2>
+<p>The component uses CSS for skeleton animation rather than JavaScript animation loops. The loading layout reserves space to reduce layout shifts.</p>
+<p>Request identifiers protect the interface from out-of-order asynchronous responses. Request cancellation is used where available, while request identity remains the correctness mechanism.</p>
+<p>The component does not introduce polling or require a backend for its demonstration. A mock data source can be used to test success, failure, and retry behavior deterministically.</p>
+<p>Performance claims should be supported by measurements if numerical targets are reported.</p>
+<h2 id="8-git-and-version-control">8. Git and Version Control</h2>
+<p>The project is organized into implementation milestones to keep the work reviewable and reduce unrelated changes within commits.</p>
+<p>The asynchronous component milestone uses the required commit message:</p>
+<pre class="hljs"><code><div>feat(ui): implement multi-state data component with skeleton feedback
+</div></code></pre>
+<p>The intended feature files are:</p>
+<ul>
+<li><code>asyncDataComponent.js</code></li>
+<li><code>asyncDataComponent.css</code></li>
+<li><code>asyncDataComponent.test.js</code></li>
+<li><code>asyncDataComponent.demo.html</code></li>
+</ul>
+<p>Before committing, inspect the staged changes:</p>
+<pre class="hljs"><code><div>git status
+git diff --cached
+git show --<span class="hljs-built_in">stat</span> --oneline HEAD
+</div></code></pre>
+<p>Only feature-related files should be included in the asynchronous component commit.</p>
+<p><img src="image-1.png" alt="alt text"></p>
+<p>Capture the terminal showing the required commit message and the files included in the commit.</p>
+<h2 id="10-limitations-and-future-improvements">10. Limitations and Future Improvements</h2>
+<p>The current milestone focuses on the core UI architecture and resilient asynchronous rendering. The demo uses a mock data source and does not require a backend.</p>
+<p>Potential future improvements include:</p>
+<ul>
+<li>Integrating a real API through the existing data-source interface.</li>
+<li>Expanding browser-level automated testing.</li>
+<li>Measuring layout shifts and rendering performance under realistic workloads.</li>
+<li>Extending the renderer only when a future milestone explicitly requires it.</li>
+</ul>
+<p>Virtual DOM reconciliation and a generalized diffing engine remain outside the scope of this milestone.</p>
+<h2 id="11-conclusion">11. Conclusion</h2>
+<p>This project demonstrates how foundational UI framework features can be implemented using vanilla JavaScript. The Virtual DOM factory, recursive renderer, state engine, event delegation system, Task Manager, and resilient asynchronous data component provide a modular foundation for building reactive user interfaces.</p>
+<p>The asynchronous component adds explicit state transitions, loading feedback, safe response rendering, accessible error recovery, request identity, and lifecycle cleanup.</p>
+<p>The recorded automated tests provide evidence for the factory, renderer, and asynchronous component contracts. Browser screenshots and DevTools inspection should be included to complete the visual and integration evidence.</p>
+
+</body>
+</html>

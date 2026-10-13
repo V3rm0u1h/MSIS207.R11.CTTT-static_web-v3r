@@ -3,7 +3,8 @@
 # Mini-React: A Lightweight Reactive UI Framework
 
 ## 1. Project Overview
-
+| GitHub Repository      | [MSIS207.R11.CTTT-static_web-v3r](https://github.com/V3rm0u1h/MSIS207.R11.CTTT-static_web-v3r.git) |
+| ChatGPT Conversation 1 | [View chat](hhttps://chatgpt.com/share/6aca6d1c-4c10-83ec-85ed-8961fb4b8667)                        
 ### 1.1 Objective
 
 The objective of this project is to build a lightweight UI framework from scratch using vanilla JavaScript. The project explores how core frontend framework concepts work internally, including Virtual DOM creation, DOM rendering, state management, event delegation, and asynchronous UI updates.
@@ -89,11 +90,7 @@ The Task Manager demonstrates how the framework's state and event mechanisms can
 
 The application supports task creation, completion, deletion, and filtering by All, Active, and Completed status. The interface updates in response to user interactions.
 
-**Insert Image 2 here: Task Manager application.**
 
-Capture the application with several tasks visible, including a completed task and the filter controls.
-
-*Suggested filename: `screenshots/02-task-manager.png`*
 
 ### 3.5 Resilient Asynchronous Data Component
 
@@ -110,57 +107,11 @@ The component also supports request cancellation where possible and invalidates 
 
 The response is validated before its fields are used. Empty valid responses are handled separately from malformed data.
 
-## 4. User Interface and Browser Evidence
-
-This section records the visual evidence required to demonstrate the component's behavior.
-
-### 4.1 Loading State and Skeleton
-
-**Insert Image 3 here: Loading skeleton.**
-
-Capture the browser while the component is in `LOADING`. The screenshot should show the skeleton placeholders, the component's semantic content area, and the accessible loading-status element in the rendered DOM if practical.
-
-*Suggested filename: `screenshots/03-loading-skeleton.png`*
-
-The skeleton is implemented in CSS, reserves space for the expected content, and respects the user's reduced-motion preference.
-
-### 4.2 Success State
-
-**Insert Image 4 here: Successful data rendering.**
-
-Capture the component after a valid request succeeds. The screenshot should show the returned data rendered as semantic content.
-
-*Suggested filename: `screenshots/04-success-state.png`*
-
-This evidence should demonstrate that the skeleton has been replaced by the latest successful response.
-
-### 4.3 Error State and Retry Recovery
-
-**Insert Image 5 here: Error state and retry button.**
-
-Capture the component after a request fails. Ensure the human-readable error message and the **Retry Connection** button are visible.
-
-*Suggested filename: `screenshots/05-error-retry.png`*
-
-Then activate the retry button and verify that a new request starts. If the retry succeeds, capture the recovered success state as additional evidence.
-
-*Suggested filename: `screenshots/06-retry-recovery.png`*
-
-### 4.4 Semantic DOM Inspection
-
-**Insert Image 7 here: Chrome DevTools Elements panel.**
-
-Open Chrome DevTools and select the Elements panel. Capture the rendered component tree, showing the expected semantic elements and the absence of unnecessary wrapper elements.
-
-*Suggested filename: `screenshots/07-semantic-dom.png`*
-
-This screenshot should demonstrate the actual browser DOM structure. It should not be replaced by a screenshot of the source code alone.
-
-## 5. Security and Safe Rendering
+## 4. Security and Safe Rendering
 
 Security is an important part of the Mini-React implementation.
 
-### 5.1 Safe Text Rendering
+### 4.1 Safe Text Rendering
 
 Text values are rendered through text nodes instead of being parsed as HTML. The implementation does not use `innerHTML` to render untrusted response content.
 
@@ -174,27 +125,17 @@ Expected result:
 - No script element is created from the string.
 - The JavaScript contained in the string does not execute.
 
-### 5.2 Input and Response Validation
+### 4.2 Input and Response Validation
 
 The VNode factory and renderer validate their inputs before creating DOM nodes. The asynchronous component validates response data before using its fields.
 
 The component also avoids exposing stack traces or sensitive implementation details in user-facing error messages.
 
-### 5.3 XSS Verification Evidence
-
-**Insert Image 8 here: XSS-safe text rendering.**
-
-Capture the browser and DevTools Elements panel with the test string visible as literal text. The screenshot should make it possible to distinguish the text content from a real script element.
-
-*Suggested filename: `screenshots/08-xss-safe-text.png`*
-
-A screenshot alone does not prove that JavaScript never executed. The automated security test must also pass.
-
-## 6. Automated Testing
+## 5. Automated Testing
 
 Automated tests are used to verify the Virtual DOM factory, renderer, and asynchronous component independently.
 
-### 6.1 Virtual DOM Factory Tests
+### 5.1 Virtual DOM Factory Tests
 
 The factory tests cover:
 - VNode structure and nested hierarchy.
@@ -206,7 +147,7 @@ The factory tests cover:
 
 Recorded result: **18/18 tests passed.**
 
-### 6.2 Renderer Tests
+### 5.2 Renderer Tests
 
 The renderer tests cover:
 - Recursive element creation.
@@ -218,7 +159,7 @@ The renderer tests cover:
 
 Recorded result: **12/12 tests passed.**
 
-### 6.3 Asynchronous Component Tests
+### 5.3 Asynchronous Component Tests
 
 The asynchronous component tests cover:
 - Valid and invalid state transitions.
@@ -231,7 +172,7 @@ The asynchronous component tests cover:
 
 Recorded result: **10/10 tests passed.**
 
-### 6.4 Test Execution
+### 5.4 Test Execution
 
 Run the following commands from the project root:
 
@@ -245,23 +186,8 @@ node --experimental-default-type=module asyncDataComponent.test.js
 
 The recorded combined result is **40/40 automated tests passed**.
 
-**Insert Image 9 here: Automated test output.**
 
-Capture the terminal showing the test commands and successful results. Include enough output to identify the test suites and their pass counts.
-
-*Suggested filename: `screenshots/09-automated-test-results.png`*
-
-### 6.5 Race-Condition and Retry Evidence
-
-**Insert Image 10 here: Async safety test results.**
-
-Capture the test output demonstrating that outdated responses are ignored, a failed request can be retried successfully, and HTML-like text remains safe.
-
-*Suggested filename: `screenshots/10-async-safety-tests.png`*
-
-If these results are already visible in Image 9, a separate screenshot is optional. Do not claim a test passed unless it has actually been executed.
-
-## 7. Accessibility
+## 6. Accessibility
 
 The implementation considers accessibility in both the semantic DOM structure and the asynchronous component.
 
@@ -274,13 +200,9 @@ The component provides:
 - Decorative skeleton elements hidden from assistive technology.
 - Reduced-motion support for users who prefer less animation.
 
-**Insert Image 11 here: Accessibility and reduced-motion verification.**
 
-Capture a relevant DevTools inspection or browser view showing the accessible status/error elements or the reduced-motion behavior.
 
-*Suggested filename: `screenshots/11-accessibility-check.png`*
-
-## 8. Performance and Reliability
+## 7. Performance and Reliability
 
 The component uses CSS for skeleton animation rather than JavaScript animation loops. The loading layout reserves space to reduce layout shifts.
 
@@ -290,7 +212,7 @@ The component does not introduce polling or require a backend for its demonstrat
 
 Performance claims should be supported by measurements if numerical targets are reported.
 
-## 9. Git and Version Control
+## 8. Git and Version Control
 
 The project is organized into implementation milestones to keep the work reviewable and reduce unrelated changes within commits.
 
@@ -317,11 +239,11 @@ git show --stat --oneline HEAD
 
 Only feature-related files should be included in the asynchronous component commit.
 
-**Insert Image 12 here: Git commit evidence.**
+
+![alt text](image-1.png)
 
 Capture the terminal showing the required commit message and the files included in the commit.
 
-*Suggested filename: `screenshots/12-git-commit.png`*
 
 ## 10. Limitations and Future Improvements
 
@@ -343,19 +265,3 @@ The asynchronous component adds explicit state transitions, loading feedback, sa
 
 The recorded automated tests provide evidence for the factory, renderer, and asynchronous component contracts. Browser screenshots and DevTools inspection should be included to complete the visual and integration evidence.
 
-## 12. Evidence Checklist
-
-- [ ] Image 1 — Project architecture diagram.
-- [ ] Image 2 — Task Manager application.
-- [ ] Image 3 — Loading skeleton.
-- [ ] Image 4 — Success state.
-- [ ] Image 5 — Error state and retry button.
-- [ ] Image 6 — Retry recovery.
-- [ ] Image 7 — Semantic DOM in Chrome DevTools.
-- [ ] Image 8 — XSS-safe literal text.
-- [ ] Image 9 — Automated test results.
-- [ ] Image 10 — Stale-response and retry tests.
-- [ ] Image 11 — Accessibility verification.
-- [ ] Image 12 — Required Git commit.
-
-Only include screenshots that you have actually captured. If two screenshots provide the same evidence, they may be combined to keep the report concise.
