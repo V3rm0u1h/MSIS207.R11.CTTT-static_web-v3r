@@ -22,7 +22,7 @@ function mount(overrides = {}) {
         { filterDebounceMs: DEBOUNCE });
     return { root, handle };
 }
-const bodyNames = (root) => [...root.querySelectorAll("tbody tr")].map((row) => row.cells[0].textContent);
+const bodyNames = (root) => [...root.querySelectorAll("tbody tr")].map((row) => row.querySelector("th").textContent);
 const sortButton = (root, key) => root.querySelector(`[data-sort-key="${key}"]`);
 const status = (root) => root.querySelector("[role=status]");
 function typeFilter(root, value) {
@@ -54,10 +54,11 @@ test("filter form is omitted when no column is filterable", () => {
 
 test("sortable headers hold a native button; others are plain text", () => {
     const { root } = mount();
+    // Column 0 is the selection column, so data headers start at index 1.
     const headers = root.querySelectorAll("thead th");
-    assertEqual(headers[0].querySelector("button").type, "button", "Name is a button");
-    assertEqual(headers[0].querySelector("button").textContent, "Name", "Button name is the label only");
-    assertEqual(headers[1].querySelector("button"), null, "Team is not sortable");
+    assertEqual(headers[1].querySelector("button").type, "button", "Name is a button");
+    assertEqual(headers[1].querySelector("button").textContent, "Name", "Button name is the label only");
+    assertEqual(headers[2].querySelector("button"), null, "Team is not sortable");
     assert([...headers].every((th) => !th.hasAttribute("aria-sort")), "No aria-sort before sorting");
 });
 
@@ -146,7 +147,7 @@ test("no matches shows the empty state with the query as literal text", async ()
     await wait(DEBOUNCE + 30);
     const cell = root.querySelector("tbody td");
     assertEqual(cell.textContent, "No rows match “<img src=x onerror=alert(1)>”.", "Empty message");
-    assertEqual(cell.colSpan, columns.length, "Full-width cell");
+    assertEqual(cell.colSpan, columns.length + 1, "Full-width cell, including the selection column");
     assertEqual(root.querySelectorAll("img").length, 0, "No img element");
     assertEqual(status(root).textContent, "Filtered by “<img src=x onerror=alert(1)>”. 0 of 3 rows shown.", "Status");
 });

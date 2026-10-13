@@ -205,7 +205,7 @@ function token(name) {
 
 test("text tokens meet 4.5:1 on every background", () => {
     for (const foreground of ["--grid-text", "--grid-muted"]) {
-        for (const background of ["--grid-surface", "--grid-header-bg", "--grid-zebra-bg"]) {
+        for (const background of ["--grid-surface", "--grid-header-bg", "--grid-zebra-bg", "--grid-selected-bg"]) {
             const ratio = contrastRatio(token(foreground), token(background));
             assert(ratio >= 4.5, `${foreground} on ${background} is ${ratio.toFixed(2)}:1`);
         }
@@ -214,7 +214,7 @@ test("text tokens meet 4.5:1 on every background", () => {
 
 test("border and focus tokens meet 3:1 on every background", () => {
     for (const foreground of ["--grid-border", "--grid-focus"]) {
-        for (const background of ["--grid-surface", "--grid-header-bg", "--grid-zebra-bg"]) {
+        for (const background of ["--grid-surface", "--grid-header-bg", "--grid-zebra-bg", "--grid-selected-bg"]) {
             const ratio = contrastRatio(token(foreground), token(background));
             assert(ratio >= 3, `${foreground} on ${background} is ${ratio.toFixed(2)}:1`);
         }

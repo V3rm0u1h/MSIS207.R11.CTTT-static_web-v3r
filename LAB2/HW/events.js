@@ -1,11 +1,11 @@
 /**
  * Mini-React root event delegation.
- * Supported native events: click, submit, input.
+ * Supported native events: click, submit, input, keydown, focusin.
  * Child elements hold trusted callback references in a WeakMap; native
  * listeners are attached to the stable root only.
  */
 
-const SUPPORTED_EVENT_TYPES = new Set(["click", "submit", "input"]);
+const SUPPORTED_EVENT_TYPES = new Set(["click", "submit", "input", "keydown", "focusin"]);
 const handlerRegistry = new WeakMap();
 const rootRegistrations = new WeakMap();
 
@@ -106,4 +106,4 @@ export function attachRootEventDelegation(root, eventTypes = ["click", "submit",
     }
 }
 
-export const supportedDelegatedEvents = Object.freeze(["click", "submit", "input"]);
+export const supportedDelegatedEvents = Object.freeze(["click", "submit", "input", "keydown", "focusin"]);

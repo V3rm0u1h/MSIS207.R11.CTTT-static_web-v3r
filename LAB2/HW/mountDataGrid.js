@@ -1,5 +1,5 @@
 /**
- * Accessible Data-Grid — mount and interaction wiring (PRD 2, PRD 3)
+ * Accessible Data-Grid — mount and interaction wiring (PRD 2, PRD 3, PRD 4)
  *
  * Layout inside the mount root:
  *   <form role="search">  filter field, rendered once and never rebuilt
@@ -11,6 +11,12 @@
  * Form controls live outside the re-rendered subtrees, so using them never
  * loses focus or caret position. Re-rendered buttons get focus back after
  * each render. Events go through the root delegation system.
+ *
+ * Keyboard model (WAI-ARIA APG grid pattern, PRD 4): the grid is one Tab stop
+ * with a roving tabindex. Arrow keys, Home/End and Ctrl+Home/End move between
+ * cells without re-rendering; Page Up/Down change page; Enter selects only the
+ * focused row and Space toggles it. Native buttons and checkboxes keep their
+ * own Enter/Space behaviour.
  */
 
 import { createElement } from "./createElement.js";
@@ -88,6 +94,16 @@ export function mountDataGrid(root, props, options = {}) {
     const id = props.id ?? "data-grid";
     const emptyMessage = props.emptyMessage ?? DEFAULT_EMPTY_MESSAGE;
     const filterableColumns = controller.columns.filter((column) => column.filterable === true);
+    // Column 0 is the selection checkbox column; row 0 is the header row.
+    const columnCount = controller.columns.length + 1;
+    let activeCell = { row: 0, col: 0 };
+
+    function clampCell(cell, rowCount) {
+        return {
+            row: Math.min(Math.max(cell.row, 0), rowCount),
+            col: Math.min(Math.max(cell.col, 0), columnCount - 1)
+        };
+    }
 
     function gridVNode(snapshot) {
         const query = snapshot.filterText.trim();
@@ -102,8 +118,113 @@ export function mountDataGrid(root, props, options = {}) {
             sortDirection: snapshot.sortDirection,
             onSort: (key) => controller.toggleSort(key),
             rowCount: snapshot.visibleCount,
-            firstRowIndex: snapshot.firstRowIndex
+            firstRowIndex: snapshot.firstRowIndex,
+            interaction: {
+                activeCell,
+                rowIds: [...snapshot.rowIds],
+                selectedIds: [...snapshot.selectedIds],
+                onToggleRow: (rowId) => controller.toggleRow(rowId),
+                onTogglePage: togglePageSelection,
+                onKeyDown: handleGridKeyDown,
+                onFocusIn: handleGridFocusIn
+            }
         });
+    }
+
+    // --- Selection ---
+    function togglePageSelection() {
+        const { rowIds, selectedIds } = controller.getSnapshot();
+        const allSelected = rowIds.length > 0 && rowIds.every((rowId) => selectedIds.includes(rowId));
+        controller.setRowsSelected([...rowIds], !allSelected);
+    }
+
+    /** The select-all box is "mixed" when only some rows on the page are selected. */
+    function syncSelectAll(snapshot) {
+        const box = gridElement.querySelector("thead input[type=checkbox]");
+        const selectedOnPage = snapshot.rowIds.filter((rowId) => snapshot.selectedIds.includes(rowId)).length;
+        box.indeterminate = selectedOnPage > 0 && selectedOnPage < snapshot.rowIds.length;
+    }
+
+    // --- Roving tabindex and keyboard navigation ---
+    function focusTargetAt(row, col) {
+        const cell = gridElement.querySelector(`[data-row="${row}"][data-col="${col}"]`);
+        if (!cell) return null;
+        // A cell holding a native control hands focus to the control.
+        return cell.querySelector("button, input") ?? cell;
+    }
+
+    /** Move the single tabindex="0" to (row, col) without re-rendering. */
+    function setActiveCell(row, col, { focus = true } = {}) {
+        const next = focusTargetAt(row, col);
+        if (!next) return;
+        const previous = focusTargetAt(activeCell.row, activeCell.col);
+        if (previous && previous !== next) previous.tabIndex = -1;
+        next.tabIndex = 0;
+        activeCell = { row, col };
+        if (focus) next.focus();
+    }
+
+    function handleGridFocusIn(event) {
+        // Mouse clicks and programmatic focus keep the roving tabindex in step.
+        const cell = event.target.closest("[data-row]");
+        if (cell && gridElement.contains(cell)) {
+            setActiveCell(Number(cell.dataset.row), Number(cell.dataset.col), { focus: false });
+        }
+    }
+
+    function handleEnter(event, row, col) {
+        // A focused sort button sorts natively on Enter.
+        if (event.target.tagName === "BUTTON") return;
+        event.preventDefault();
+        if (row === 0) {
+            if (col === 0) togglePageSelection();
+            return;
+        }
+        controller.selectOnly(controller.getSnapshot().rowIds[row - 1]);
+    }
+
+    function handleSpace(event, row) {
+        // Buttons and checkboxes already turn Space into a click.
+        if (event.target.tagName === "BUTTON" || event.target.type === "checkbox") return;
+        event.preventDefault(); // never scroll the page from inside the grid
+        if (row > 0) controller.toggleRow(controller.getSnapshot().rowIds[row - 1]);
+    }
+
+    function handleGridKeyDown(event) {
+        const cell = event.target.closest("[data-row]");
+        if (!cell || !gridElement.contains(cell)) return;
+        const row = Number(cell.dataset.row);
+        const col = Number(cell.dataset.col);
+        const snapshot = controller.getSnapshot();
+        const lastRow = snapshot.rows.length;
+        const lastCol = columnCount - 1;
+        const jump = event.ctrlKey || event.metaKey;
+        let target;
+
+        switch (event.key) {
+            case "ArrowUp": target = [row - 1, col]; break;
+            case "ArrowDown": target = [row + 1, col]; break;
+            case "ArrowLeft": target = [row, col - 1]; break;
+            case "ArrowRight": target = [row, col + 1]; break;
+            case "Home": target = jump ? [0, 0] : [row, 0]; break;
+            case "End": target = jump ? [lastRow, lastCol] : [row, lastCol]; break;
+            case "PageUp":
+            case "PageDown": {
+                event.preventDefault();
+                const page = snapshot.page + (event.key === "PageDown" ? 1 : -1);
+                // Focus stays in the same row and column; rerender restores it.
+                if (page >= 1 && page <= snapshot.pageCount) controller.setPage(page);
+                return;
+            }
+            case "Enter": handleEnter(event, row, col); return;
+            case " ": handleSpace(event, row); return;
+            default: return;
+        }
+
+        event.preventDefault(); // arrows must not scroll the page
+        // Clamping stops at the edges instead of wrapping.
+        const next = clampCell({ row: target[0], col: target[1] }, lastRow);
+        setActiveCell(next.row, next.col);
     }
 
     function pagerVNode(snapshot) {
@@ -164,25 +285,27 @@ export function mountDataGrid(root, props, options = {}) {
         }))
         : null;
 
-    attachRootEventDelegation(root, ["click", "submit", "input"]);
+    attachRootEventDelegation(root, ["click", "submit", "input", "keydown", "focusin"]);
     root.replaceChildren(...[filterElement, statusElement, gridElement, pageSizeElement, pagerElement].filter(Boolean));
+    syncSelectAll(initial);
 
     function restorePagerFocus(action) {
         const same = pagerElement.querySelector(`[data-page-action="${CSS.escape(action)}"]`);
         // A button that just became disabled (Next on the last page) cannot hold
         // focus, so fall back to the current page, then to the grid.
         const target = same && !same.disabled ? same
-            : pagerElement.querySelector("[aria-current=page]") ?? gridElement;
+            : pagerElement.querySelector("[aria-current=page]") ?? focusTargetAt(activeCell.row, activeCell.col);
         target.focus();
     }
 
     function rerender(snapshot) {
         const active = root.ownerDocument.activeElement;
-        const focusedSortKey = active && gridElement.contains(active) ? active.getAttribute("data-sort-key") : null;
+        const gridHadFocus = Boolean(active) && gridElement.contains(active);
         const focusedPageAction = active && pagerElement.contains(active) ? active.getAttribute("data-page-action") : null;
-        const regionWasFocused = active === gridElement;
         const scrollLeft = gridElement.scrollLeft;
 
+        // Fewer rows after a filter or page change: keep the active cell inside the grid.
+        activeCell = clampCell(activeCell, snapshot.rows.length);
         const nextGrid = renderToDOM(gridVNode(snapshot));
         gridElement.replaceWith(nextGrid);
         gridElement = nextGrid;
@@ -192,13 +315,13 @@ export function mountDataGrid(root, props, options = {}) {
         pagerElement.replaceWith(nextPager);
         pagerElement = nextPager;
 
-        // Pressed buttons were replaced; move focus to their new copies.
-        if (focusedSortKey !== null) {
-            gridElement.querySelector(`[data-sort-key="${CSS.escape(focusedSortKey)}"]`)?.focus();
+        syncSelectAll(snapshot);
+
+        // Focused elements were replaced; move focus to their new copies.
+        if (gridHadFocus) {
+            focusTargetAt(activeCell.row, activeCell.col)?.focus();
         } else if (focusedPageAction !== null) {
             restorePagerFocus(focusedPageAction);
-        } else if (regionWasFocused) {
-            gridElement.focus();
         }
         statusElement.textContent = controller.describe(snapshot);
     }
@@ -212,6 +335,7 @@ export function mountDataGrid(root, props, options = {}) {
         controller,
         get element() { return gridElement; },
         get pager() { return pagerElement; },
+        get activeCell() { return { ...activeCell }; },
         flushFilter,
         dispose() {
             if (!mounted) return;

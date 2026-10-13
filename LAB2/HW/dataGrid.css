@@ -9,6 +9,9 @@
  * | --grid-muted    |  7.69:1    |  6.53:1      |  7.10:1     |
  * | --grid-border   |  4.83:1    |  4.11:1      |  4.47:1     |
  * | --grid-focus    |  6.70:1    |  5.70:1      |  6.19:1     |
+ *
+ * Selected rows (PRD 4) use --grid-selected-bg:
+ *   text 12.73:1, muted 6.13:1, border 3.86:1, focus 5.35:1.
  */
 :root {
     --grid-text: #1a2230;
@@ -18,6 +21,7 @@
     --grid-zebra-bg: #f4f6f9;
     --grid-border: #6b7280;
     --grid-focus: #1d4ed8;
+    --grid-selected-bg: #dbe6fd;
 }
 
 .data-grid {
@@ -243,4 +247,51 @@
 .data-grid-pager__gap {
     padding-inline: 0.25rem;
     color: var(--grid-muted);
+}
+
+/* --- PRD 4: grid focus and selection -------------------------------------- */
+
+/* Focused cells: an inset ring so the scroll region never clips it (2.4.11). */
+.data-grid__table--interactive [data-row]:focus-visible {
+    outline: 2px solid var(--grid-focus);
+    outline-offset: -3px;
+}
+
+.data-grid__table--interactive [data-row]:focus:not(:focus-visible) {
+    outline: none;
+}
+
+.data-grid__cell--select {
+    width: 1%;
+    text-align: center;
+}
+
+.data-grid__select-all {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    cursor: pointer;
+}
+
+.data-grid__checkbox {
+    width: 1.5rem;  /* 24 x 24 px target (WCAG 2.5.8) */
+    height: 1.5rem;
+    margin: 0;
+    accent-color: var(--grid-focus);
+    cursor: pointer;
+}
+
+.data-grid__checkbox:focus-visible {
+    outline: 2px solid var(--grid-focus);
+    outline-offset: 2px;
+}
+
+/* Selection never relies on colour alone: the checkbox is ticked and the row
+ * gets a thick left bar as well as the tinted background. */
+.data-grid tbody tr.data-grid__row--selected {
+    background: var(--grid-selected-bg);
+}
+
+.data-grid__row--selected > :first-child {
+    box-shadow: inset 0.25rem 0 0 var(--grid-focus);
 }

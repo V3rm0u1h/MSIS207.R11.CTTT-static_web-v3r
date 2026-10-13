@@ -8,6 +8,8 @@
  * active column exposes its direction through aria-sort.
  * PRD 3: when the grid shows one page of a larger set, aria-rowcount and
  * aria-rowindex tell screen readers each row's true position.
+ * PRD 4: an optional `interaction` prop turns the table into an ARIA grid with
+ * a selection column and a roving tabindex for arrow-key navigation.
  *
  * This module is pure: it builds VNodes and never touches the DOM. Mounting
  * and state live in mountDataGrid.js and gridModel.js.
@@ -219,10 +221,72 @@ function renderCellContent(value, column, formatters) {
     return text;
 }
 
-function renderHeaderCell(column, sort) {
+// --- Grid mode (PRD 4) -------------------------------------------------------
+// With an `interaction` prop the table becomes an ARIA grid: a selection
+// column is added in front, every cell is addressed by data-row / data-col
+// (row 0 is the header), and exactly one focus target has tabindex="0".
+// A cell's focus target is its native control (sort button, checkbox) when
+// it has one, otherwise the cell itself.
+
+function validateInteraction(interaction, rows) {
+    if (interaction === undefined) return null;
+    if (!isPlainObject(interaction)) {
+        throw new TypeError("Data-Grid: interaction must be a plain object.");
+    }
+    const { activeCell, rowIds, selectedIds } = interaction;
+    if (!isPlainObject(activeCell) || !isNonNegativeInteger(activeCell.row) || !isNonNegativeInteger(activeCell.col)) {
+        throw new TypeError("Data-Grid: interaction.activeCell must be { row, col } with non-negative integers.");
+    }
+    if (!Array.isArray(rowIds) || rowIds.length !== rows.length) {
+        throw new TypeError("Data-Grid: interaction.rowIds must hold one id per row.");
+    }
+    if (!Array.isArray(selectedIds)) {
+        throw new TypeError("Data-Grid: interaction.selectedIds must be an array.");
+    }
+    for (const handler of ["onToggleRow", "onTogglePage", "onKeyDown", "onFocusIn"]) {
+        if (typeof interaction[handler] !== "function") {
+            throw new TypeError(`Data-Grid: interaction.${handler} must be a function.`);
+        }
+    }
+    return { ...interaction, selected: new Set(selectedIds) };
+}
+
+/** Cell coordinates for keyboard navigation, or nothing outside grid mode. */
+function cellProps(grid, row, col) {
+    if (!grid) return {};
+    return { "data-row": row, "data-col": col };
+}
+
+/** Roving tabindex: 0 for the active focus target, -1 for every other one. */
+function focusTabIndex(grid, row, col) {
+    if (!grid) return null;
+    return grid.activeCell.row === row && grid.activeCell.col === col ? 0 : -1;
+}
+
+function renderSelectAllCell(grid, rowIds) {
+    const allSelected = rowIds.length > 0 && rowIds.every((rowId) => grid.selected.has(rowId));
+    return createElement("th", { scope: "col", className: "data-grid__cell data-grid__cell--select", ...cellProps(grid, 0, 0) },
+        createElement("label", { className: "data-grid__select-all" },
+            createElement("input", {
+                type: "checkbox",
+                className: "data-grid__checkbox",
+                // The visible "All" is part of the name (WCAG 2.5.3 label in name).
+                "aria-label": "Select all rows on this page",
+                checked: allSelected,
+                tabindex: focusTabIndex(grid, 0, 0),
+                onClick: () => grid.onTogglePage()
+            }),
+            "All"
+        )
+    );
+}
+
+function renderHeaderCell(column, sort, grid, col) {
     const className = cellClassName(column);
     if (column.sortable !== true || !sort.onSort) {
-        return createElement("th", { scope: "col", className }, column.label);
+        return createElement("th", {
+            scope: "col", className, ...cellProps(grid, 0, col), tabindex: focusTabIndex(grid, 0, col)
+        }, column.label);
     }
 
     // Only the active column carries aria-sort; the direction icon is CSS-only,
@@ -231,64 +295,108 @@ function renderHeaderCell(column, sort) {
     return createElement("th", {
         scope: "col",
         className: `${className} data-grid__cell--sortable`,
-        "aria-sort": isActive ? sort.sortDirection : null
+        "aria-sort": isActive ? sort.sortDirection : null,
+        ...cellProps(grid, 0, col)
     },
         createElement("button", {
             type: "button",
             className: "data-grid__sort",
             "data-sort-key": column.key,
+            tabindex: focusTabIndex(grid, 0, col),
             onClick: () => sort.onSort(column.key)
         }, column.label)
     );
 }
 
-function renderHeaderRow(columns, sort, ariaRowIndex) {
+function renderHeaderRow(columns, sort, ariaRowIndex, grid, rowIds) {
+    const offset = grid ? 1 : 0;
     return createElement("tr", { "aria-rowindex": ariaRowIndex },
-        columns.map((column) => renderHeaderCell(column, sort)));
+        grid ? renderSelectAllCell(grid, rowIds) : null,
+        columns.map((column, index) => renderHeaderCell(column, sort, grid, index + offset)));
 }
 
-function renderBodyRow(row, columns, formatters, ariaRowIndex) {
-    return createElement("tr", { "aria-rowindex": ariaRowIndex },
-        columns.map((column, columnIndex) => {
-            const content = renderCellContent(row[column.key], column, formatters);
-            // The first column names the row, so it is announced with every cell in that row.
-            return columnIndex === 0
-                ? createElement("th", { scope: "row", className: cellClassName(column) }, content)
-                : createElement("td", { className: cellClassName(column) }, content);
+function renderSelectCell(grid, row, rowId, rowName) {
+    return createElement("td", { className: "data-grid__cell data-grid__cell--select", ...cellProps(grid, row, 0) },
+        createElement("input", {
+            type: "checkbox",
+            className: "data-grid__checkbox",
+            "aria-label": `Select ${rowName}`,
+            checked: grid.selected.has(rowId),
+            tabindex: focusTabIndex(grid, row, 0),
+            onClick: () => grid.onToggleRow(rowId)
         })
     );
 }
 
-function renderEmptyRow(columns, message) {
+function renderBodyRow(row, columns, formatters, ariaRowIndex, grid, rowNumber, rowId) {
+    const offset = grid ? 1 : 0;
+    const isSelected = grid ? grid.selected.has(rowId) : false;
+    const rowName = formatCellText(row[columns[0].key], columns[0], formatters) || `row ${rowNumber}`;
+
+    return createElement("tr", {
+        "aria-rowindex": ariaRowIndex,
+        "aria-selected": grid ? String(isSelected) : null,
+        className: isSelected ? "data-grid__row data-grid__row--selected" : "data-grid__row"
+    },
+        grid ? renderSelectCell(grid, rowNumber, rowId, rowName) : null,
+        columns.map((column, columnIndex) => {
+            const content = renderCellContent(row[column.key], column, formatters);
+            const col = columnIndex + offset;
+            const props = {
+                className: cellClassName(column),
+                ...cellProps(grid, rowNumber, col),
+                tabindex: focusTabIndex(grid, rowNumber, col)
+            };
+            // The first column names the row, so it is announced with every cell in that row.
+            return columnIndex === 0
+                ? createElement("th", { scope: "row", ...props }, content)
+                : createElement("td", props, content);
+        })
+    );
+}
+
+function renderEmptyRow(columnCount, message) {
     return createElement("tr", null,
-        createElement("td", { colspan: columns.length, className: "data-grid__empty" }, message)
+        createElement("td", { colspan: columnCount, className: "data-grid__empty" }, message)
     );
 }
 
 /** Build the Data-Grid VNode tree. Throws TypeError before building anything if props are invalid. */
 export function DataGrid(props) {
     const { id, caption, locale, emptyMessage, columns, rows, position, sort } = validateGridProps(props);
+    const grid = validateInteraction(props.interaction, rows);
     const formatters = createFormatters(locale);
     const captionId = `${id}-caption`;
+    const rowIds = grid ? grid.rowIds : [];
 
     // aria-rowindex is 1-based and counts the header row, so data rows start at 2.
     // An empty page has no data rows to position, so the attributes are omitted.
     const positioned = position.rowCount !== null && rows.length > 0;
     const rowIndex = (index) => (positioned ? position.firstRowIndex + index + 2 : null);
 
-    // The wrapper scrolls horizontally on narrow screens, so it is a labelled,
-    // focusable region that keyboard users can scroll.
-    return createElement("section", { id, className: "data-grid", "aria-labelledby": captionId, tabindex: 0 },
+    // The wrapper scrolls horizontally on narrow screens. A static table makes
+    // the region itself focusable so keyboard users can scroll it; in grid mode
+    // the grid already holds one Tab stop, so the region does not add another.
+    return createElement("section", {
+        id,
+        className: "data-grid",
+        "aria-labelledby": captionId,
+        tabindex: grid ? null : 0
+    },
         createElement("table", {
-            className: "data-grid__table",
-            "aria-rowcount": positioned ? position.rowCount + 1 : null
+            className: grid ? "data-grid__table data-grid__table--interactive" : "data-grid__table",
+            role: grid ? "grid" : null,
+            "aria-multiselectable": grid ? "true" : null,
+            "aria-rowcount": positioned ? position.rowCount + 1 : null,
+            ...(grid ? { onKeyDown: grid.onKeyDown, onFocusIn: grid.onFocusIn } : {})
         },
             createElement("caption", { id: captionId, className: "data-grid__caption" }, caption),
-            createElement("thead", null, renderHeaderRow(columns, sort, positioned ? 1 : null)),
+            createElement("thead", null, renderHeaderRow(columns, sort, positioned ? 1 : null, grid, rowIds)),
             createElement("tbody", null,
                 rows.length === 0
-                    ? renderEmptyRow(columns, emptyMessage)
-                    : rows.map((row, index) => renderBodyRow(row, columns, formatters, rowIndex(index)))
+                    ? renderEmptyRow(columns.length + (grid ? 1 : 0), emptyMessage)
+                    : rows.map((row, index) =>
+                        renderBodyRow(row, columns, formatters, rowIndex(index), grid, index + 1, rowIds[index]))
             )
         )
     );

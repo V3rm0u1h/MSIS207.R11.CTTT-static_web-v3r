@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="description" content="Accessible Data-Grid demo built with Mini-React and native table elements.">
     <title>Mini-React — Accessible Data-Grid</title>
+    <!-- Empty inline icon: no /favicon.ico request, so no 404 in the console (Lighthouse Best Practices). -->
+    <link rel="icon" href="data:,">
     <link rel="stylesheet" href="dataGrid.css">
     <style>
         :root { color-scheme: light; font-family: system-ui, sans-serif; background: var(--grid-zebra-bg); color: var(--grid-text); }
@@ -16,7 +18,7 @@
 <body>
 <main>
     <h1>Accessible Data-Grid</h1>
-    <p class="demo-intro">A native, screen-reader-friendly table with a contrast-checked theme (PRD 1), column sorting and text filtering (PRD 2), and pagination (PRD 3). Arrow-key navigation arrives in the next commit.</p>
+    <p class="demo-intro">A native, screen-reader-friendly table with a contrast-checked theme (PRD 1), column sorting and text filtering (PRD 2), pagination (PRD 3), and keyboard navigation with row selection (PRD 4). Tab into the grid, move with the arrow keys, press Enter to select a row or Space to toggle it.</p>
     <!-- Unlabelled mount point: the grid supplies its own region label from the caption. -->
     <section id="grid-root"></section>
     <noscript>JavaScript must be enabled to render the data grid.</noscript>

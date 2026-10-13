@@ -197,18 +197,18 @@ test("mounted grid renders exactly one page with true row positions", () => {
     assertEqual(root.querySelector("table").getAttribute("aria-rowcount"), "48", "aria-rowcount");
     pagerButton(root, "next").click();
     assertDeepEqual(bodyRows(root).map((row) => row.getAttribute("aria-rowindex")).slice(0, 2), ["12", "13"], "Page 2 indexes");
-    assertEqual(bodyRows(root)[0].cells[0].textContent, "Person 11", "Page 2 first row");
+    assertEqual(bodyRows(root)[0].querySelector("th").textContent, "Person 11", "Page 2 first row");
     assertEqual(status(root).textContent, "Page 2 of 5. Rows 11–20 of 47.", "Announcement");
 });
 
 test("number, first and last buttons jump to the right page", () => {
     const { root } = mount();
     pagerButton(root, "page-3").click();
-    assertEqual(bodyRows(root)[0].cells[0].textContent, "Person 21", "Page 3");
+    assertEqual(bodyRows(root)[0].querySelector("th").textContent, "Person 21", "Page 3");
     pagerButton(root, "last").click();
     assertEqual(bodyRows(root).length, 7, "Last page has 7 rows");
     pagerButton(root, "first").click();
-    assertEqual(bodyRows(root)[0].cells[0].textContent, "Person 01", "Back to page 1");
+    assertEqual(bodyRows(root)[0].querySelector("th").textContent, "Person 01", "Back to page 1");
 });
 
 test("focus stays on the pressed pager button", () => {
