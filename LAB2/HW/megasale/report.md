@@ -204,3 +204,121 @@ Mutation checks (each made tests fail, then the code was restored):
 | --- | --- |
 | Card re-rendered on every tick | 5 |
 | Remaining time from `firstTick + updates × 50 ms` (an interval counter) instead of `Date.now()` | 8 |
+
+## T-03 — Inventory reservation finite state machine
+
+Commit: `feat(inventory): implement reservation state machine`
+
+| File | Change |
+| --- | --- |
+| `source/reservationMachine.js` | `RESERVATION_STATE` (7 states), `RESERVATION_EVENT`, the frozen `TRANSITIONS` table, `transition(state, event)`, `canTransition`, `ReservationError` with codes |
+| `source/inventory.js` | `createInventory(total)`: `reserve` / `release` / `commit` between the available, reserved and sold buckets; `assertInventoryInvariant` |
+| `source/reservationStore.js` | The authoritative controller: `reserve`, `beginCheckout`, `completeCheckout`, `failCheckout`, `cancel`, `expire`, `activeFor`, `subscribe` |
+| `source/saleConfig.js` | Adds `productId` (lowercase letters, digits, hyphens), which every reservation records |
+| `source/productCard.js` | Available / Reserved / Sold rows; reserve form (labelled quantity field + submit); reservation panel (id, state, quantity, lock end, Cancel) |
+| `source/mountMegaSale.js` | One store per mount; the card re-renders from store snapshots on every accepted change; focus is restored by `data-focus` key |
+
+![A locked reservation](images/t03-reserved.png)
+
+Key decisions:
+
+- **One table of transitions.** `TRANSITIONS` maps each state to the events
+  it accepts, with exactly the nine moves in the PRD.
+  `transition(state, event)` returns the next state or throws
+  `ReservationError("invalid-transition")`. A test walks all 56
+  (state, event) pairs: 9 are allowed and the other 47 are rejected.
+  `PURCHASED`, `EXPIRED` and `CANCELLED` have empty rows, so an expired or
+  cancelled reservation can never reach checkout or purchase.
+- **A reservation is a record, not a flag.** It has `id`, `productId`,
+  `shopperId`, `quantity`, `createdAt`, `expiresAt` (set when it locks),
+  `updatedAt`, `state` and `failure`. The store hands out frozen snapshots;
+  only the store changes records, and only through `transition()`. Ids come
+  from `crypto.randomUUID()` (tests inject a counter), and the store
+  refuses an id it has seen before.
+- **Inventory buckets.** `total = available + reserved + sold`, all
+  non-negative safe integers. Stock only moves between buckets (reserve,
+  release, commit). Each move checks its quantity first and changes nothing
+  when rejected. The invariant is asserted after every accepted move, and
+  every store notification passes a snapshot that the tests check.
+- **Reserve, in PRD order.** (1) The sale is LIVE, (2) the quantity is a
+  whole number ≥ 1, (3) enough stock is available, (4) the shopper has no
+  active reservation. Only then is a record created and moved
+  `IDLE → RESERVING`. After the simulated processing step (400 ms in the
+  demo, instant in tests), checks 1 and 3 run again, because time and stock
+  can change while a request is in flight. Then `inventory.reserve()` runs
+  and the record moves `RESERVING → LOCKED` with
+  `expiresAt = now + lockDurationMs`. Rejections in steps 1–4 create
+  nothing and touch no stock. A failure after RESERVING moves it back to
+  `IDLE` with the reason; stock was never taken on that path.
+- **Stock is taken at lock time, not request time.** Two shoppers can both
+  pass the first check for the last units. The one whose processing
+  finishes first gets the lock; the other fails back to IDLE with "Only 1
+  unit is available." Nothing is oversold, and a failed reservation never
+  decrements `available`.
+- **No double reservation.** A request that would reserve twice is
+  rejected as `duplicate-reservation` while the shopper has a `RESERVING`,
+  `LOCKED` or `CHECKING_OUT` reservation. In the UI the form is replaced by
+  the "Reserving…" panel as soon as it is submitted, so a second click has
+  nothing to submit. A test also calls the store directly to check the
+  second layer.
+- **Checkout guard.** `beginCheckout` accepts only `LOCKED`. A lock whose
+  `expiresAt` has passed is expired on the spot (stock released) and the
+  call is rejected. The same applies to `completeCheckout`, so a checkout
+  that outlives its lock ends `EXPIRED`, never `PURCHASED`. Expiry is lazy
+  in T-03; a timer that expires locks on its own belongs to a later
+  milestone. The checkout methods exist and are tested, but the checkout
+  screen is not built yet.
+- **Errors the user can act on.** Every rejection is a `ReservationError`
+  with a stable `code` (`not-live`, `sale-ended`, `invalid-quantity`,
+  `insufficient-stock`, `duplicate-reservation`, `not-found`,
+  `invalid-transition`, `reservation-expired`, `processing-failed`) and a
+  plain message, shown in the live region as "Could not reserve: …". An
+  unexpected error in processing is wrapped as `processing-failed` and
+  keeps the original as `cause`.
+- **UI.** A live sale with stock shows a `<form>` with a labelled
+  `<input type="number" min="1" max="available">` and a submit button. Enter
+  submits, and the default page reload is prevented. The typed value is
+  kept across re-renders. An active reservation shows a `<section>` with
+  its id, state, quantity, lock end (`<time>`) and a Cancel button, enabled
+  only while LOCKED. After reserving, focus moves to Cancel; after
+  cancelling, it moves back to the first control.
+- **Scope.** The store is in-memory and per page. It keeps stock
+  consistent for the reservations it sees, including several shoppers in
+  one page, but it cannot coordinate browsers or devices. It is a
+  simulation, not an inventory service.
+
+Tests: `source/megaSale.test.html` — 73/73 passed (headless Edge 155). The
+24 store-and-machine tests cover the state list and frozen table, every
+allowed and every rejected (state, event) pair, terminal states,
+inventory moves and rejected overdrafts, the invariant checker, the
+reserve path and its timestamps, stock not taken while RESERVING,
+rejections before the start or after the end, bad quantities, too large a
+quantity, duplicates while RESERVING and while LOCKED, a second shopper,
+stock running out or the sale ending while RESERVING, processing failures,
+the checkout guard, lazy expiry, purchase and failed checkout, checkout
+outliving the lock, cancel/expire releasing stock, and a 30-step mixed
+sequence across five shoppers. The invariant is checked after every step,
+and the end state is checked to see that reserved and sold match the
+reservations. Nine UI tests cover the form and label, reserving (panel,
+stock rows, announcement, focus), the RESERVING panel, invalid quantities
+with no stock change, double submission, the prevented page reload,
+cancelling, the typed value surviving a re-render, and a reservation that
+stays visible at zero stock.
+
+Demo check: reserving 2 units in `?scenario=live` shows "Available 48 of 50,
+Reserved 2, Sold 0", the panel in state "Reserved (locked)" with its lock
+end, and "Reserved 2 units until …" in the live region. It works at 900 px
+and 375 px with no console errors.
+
+Mutation checks (each made tests fail, then the code was restored):
+
+| Mutation | Failing tests |
+| --- | --- |
+| `EXPIRED` may go to checkout | 3 |
+| `cancel()` does not release stock | 2 |
+| Duplicate-reservation check removed | 2 |
+| Stock not re-checked after RESERVING (oversell) | 1 |
+
+The duplicate mutation first made the suite hang instead of fail: the
+test awaited a second reservation whose processing never finished. That
+await is now raced against one tick.

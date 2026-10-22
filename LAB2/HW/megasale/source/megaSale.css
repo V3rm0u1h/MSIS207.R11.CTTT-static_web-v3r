@@ -1,4 +1,4 @@
-/* Vietnam Mega-Sale Simulator — presentation (T-01, T-02 countdown)
+/* Vietnam Mega-Sale Simulator — presentation (T-01, T-02 countdown, T-03 reservations)
  *
  * Contrast ratios use the WCAG 2.x relative-luminance formula, measured on
  * --sale-surface (#ffffff). Targets: text >= 4.5:1, borders/focus >= 3:1.
@@ -139,4 +139,58 @@
     .sale-card__facts { grid-template-columns: 1fr; gap: 0.125rem; }
     .sale-card__facts dd { margin-bottom: 0.5rem; }
     .sale-card__action { width: 100%; }
+}
+
+/* T-03: reserve form and reservation panel */
+.sale-reserve {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 0.75rem;
+}
+
+.sale-reserve input {
+    width: 5rem;
+    min-height: 2.75rem;
+    padding: 0.25rem 0.5rem;
+    border: 1px solid var(--sale-border);
+    border-radius: 0.375rem;
+    color: var(--sale-text);
+    font: inherit;
+}
+
+.sale-reserve input:focus-visible,
+.sale-card__secondary:focus-visible {
+    outline: 2px solid var(--sale-focus);
+    outline-offset: 2px;
+}
+
+.sale-reservation {
+    padding: 1rem;
+    border: 1px solid var(--sale-border);
+    border-left: 4px solid var(--sale-live);
+    border-radius: 0.5rem;
+}
+
+.sale-reservation h3 {
+    margin: 0 0 0.75rem;
+    font-size: 1.125rem;
+}
+
+.sale-reservation .sale-card__facts { margin-bottom: 1rem; }
+
+.sale-card__secondary {
+    min-height: 2.75rem;
+    padding: 0.5rem 1rem;
+    border: 1px solid var(--sale-border);
+    border-radius: 0.375rem;
+    background: var(--sale-surface);
+    color: var(--sale-text);
+    font: inherit;
+    cursor: pointer;
+}
+
+.sale-card__secondary:disabled {
+    color: var(--sale-muted);
+    cursor: not-allowed;
 }

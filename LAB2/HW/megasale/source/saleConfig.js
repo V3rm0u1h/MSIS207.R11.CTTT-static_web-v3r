@@ -11,6 +11,7 @@
  */
 
 const MINUTE_MS = 60 * 1000;
+const PRODUCT_ID_PATTERN = /^[a-z0-9-]+$/;
 
 export const DEFAULT_TIME_ZONE = "Asia/Ho_Chi_Minh";
 export const DEFAULT_LOCALE = "vi-VN";
@@ -57,6 +58,7 @@ export function createSampleConfig(now = Date.now(), options = {}) {
     const startsAt = now + startsInMs;
     return Object.freeze({
         campaignName: "Siêu Sale 11.11",
+        productId: "song-am-x1",
         productName: "Tai nghe không dây Sóng Âm X1",
         originalPrice: 1_290_000,
         salePrice: 799_000,
@@ -78,11 +80,14 @@ export function validateSaleConfig(config) {
     }
     const errors = [];
     const {
-        campaignName, productName, originalPrice, salePrice, initialInventory,
+        campaignName, productId, productName, originalPrice, salePrice, initialInventory,
         startsAt, endsAt, lockDurationMs, timeZone = DEFAULT_TIME_ZONE
     } = config;
 
     if (!isNonEmptyString(campaignName)) errors.push("Campaign name must be a non-empty text.");
+    if (typeof productId !== "string" || !PRODUCT_ID_PATTERN.test(productId)) {
+        errors.push("Product id must use lowercase letters, digits and hyphens.");
+    }
     if (!isNonEmptyString(productName)) errors.push("Product name must be a non-empty text.");
     if (!isPositiveInteger(originalPrice)) errors.push("Original price must be a positive whole number of đồng.");
     if (!isPositiveInteger(salePrice)) {
@@ -105,6 +110,7 @@ export function validateSaleConfig(config) {
         ok: true,
         config: Object.freeze({
             campaignName: campaignName.trim(),
+            productId,
             productName: productName.trim(),
             originalPrice,
             salePrice,

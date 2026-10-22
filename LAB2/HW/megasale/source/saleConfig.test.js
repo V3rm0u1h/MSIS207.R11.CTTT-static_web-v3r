@@ -9,7 +9,7 @@ const NOW = Date.UTC(2026, 10, 10, 17, 0, 0); // 11 Nov 2026 00:00 in Asia/Ho_Ch
 test("sample config holds every campaign field in epoch milliseconds", () => {
     const config = createSampleConfig(NOW);
     assertDeepEqual(Object.keys(config), [
-        "campaignName", "productName", "originalPrice", "salePrice", "initialInventory",
+        "campaignName", "productId", "productName", "originalPrice", "salePrice", "initialInventory",
         "startsAt", "endsAt", "lockDurationMs", "timeZone"
     ], "Fields");
     assertEqual(config.startsAt, NOW + 2 * 60 * 1000, "Starts 2 minutes after now");
@@ -46,11 +46,11 @@ test("validation never throws and lists every invalid field", () => {
         assertEqual(result.errors.length, 1, "One clear message");
     }
     const result = validateSaleConfig({
-        campaignName: " ", productName: 7, originalPrice: -1, salePrice: 10.5,
+        campaignName: " ", productId: "Bad Id", productName: 7, originalPrice: -1, salePrice: 10.5,
         initialInventory: -3, startsAt: "now", endsAt: Number.NaN, lockDurationMs: 0, timeZone: "Mars/Olympus"
     });
     assertEqual(result.ok, false, "Invalid");
-    assertEqual(result.errors.length, 9, `Every field reported: ${result.errors.join(" | ")}`);
+    assertEqual(result.errors.length, 10, `Every field reported: ${result.errors.join(" | ")}`);
 });
 
 test("inventory must be a non-negative integer; zero is allowed", () => {

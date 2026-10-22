@@ -5,19 +5,27 @@ import { manualTimer } from "./countdown.test.js";
 
 // T-01 — product card, status-driven button, error view and mounting.
 // T-02 — countdown wiring.
+// T-03 — reserve form, reservation panel and stock display.
 
 const START = Date.UTC(2026, 10, 10, 17, 0, 0); // 11 Nov 2026 00:00 in Asia/Ho_Chi_Minh
 const config = createSampleConfig(START, { startsInMs: 0, durationMs: 60 * 60 * 1000 });
 
-/** Mount with a controllable clock and a manual timer (no real intervals outlive a test). */
-function mount(props = {}, at = START) {
+/**
+ * Mount with a controllable clock, a manual timer (no real intervals outlive a
+ * test) and instant reservation processing unless options.processReservation is given.
+ */
+function mount(props = {}, at = START, options = {}) {
     const root = document.createElement("section");
     sandbox().append(root);
     const clock = { now: at };
     const timer = manualTimer();
+    let sequence = 0;
     const handle = mountMegaSale(root, { id: "sale", config, ...props }, {
         now: () => clock.now,
-        timer: { setInterval: timer.setInterval, clearInterval: timer.clearInterval }
+        timer: { setInterval: timer.setInterval, clearInterval: timer.clearInterval },
+        processReservation: () => Promise.resolve(),
+        createId: () => `reservation-${++sequence}`,
+        ...options
     });
     return { root, handle, clock, timer };
 }
@@ -35,19 +43,22 @@ test("renders a semantic product card with no div elements", () => {
     assertEqual(card.querySelector("h2").textContent, config.productName, "Product name");
     assertEqual(card.querySelector("h2").getAttribute("lang"), "vi", "Vietnamese text marked");
     assertEqual(root.querySelector("[role=status]").getAttribute("aria-live"), "polite", "Live region");
-    assertEqual(action(root).getAttribute("type"), "button", "Native button");
+    assertEqual(action(root).tagName, "BUTTON", "Native button");
+    assertEqual(action(root).getAttribute("type"), "submit", "Submits the reserve form");
 });
 
 test("shows both prices with text labels, the discount and the inventory", () => {
     const { root } = mount();
     const shown = facts(root);
-    assertDeepEqual(Object.keys(shown), ["Original price", "Sale price", "Available", "Status", "Sale window"], "Labels");
+    assertDeepEqual(Object.keys(shown), ["Original price", "Sale price", "Available", "Reserved", "Sold", "Status", "Sale window"], "Labels");
     const original = root.querySelector("del");
     assert(original.textContent.replace(/\D/g, "") === "1290000", `Original price formatted: ${original.textContent}`);
     assert(original.textContent.includes("₫"), "Currency shown");
     assert(root.querySelector("strong").textContent.replace(/\D/g, "") === "799000", "Sale price");
     assert(shown["Sale price"].endsWith("(38% off)"), "Discount as text");
-    assertEqual(root.querySelector("output[data-inventory]").textContent, "50", "Inventory");
+    assertEqual(root.querySelector("output[data-inventory=available]").textContent, "50", "Inventory");
+    assertEqual(shown.Reserved, "0", "Nothing reserved yet");
+    assertEqual(shown.Sold, "0", "Nothing sold yet");
     assertEqual(shown.Available, "50 of 50 units", "Inventory sentence");
     assertEqual(root.querySelectorAll("time[datetime]").length, 2, "Machine-readable sale window");
     assertEqual(root.querySelector("time[datetime]").getAttribute("datetime"), "2026-11-10T17:00:00.000Z", "Start as ISO");
@@ -141,8 +152,8 @@ test("validates mount arguments before touching the root", () => {
 test("two simulators on one page keep separate state", () => {
     const first = mount({ id: "first" });
     const second = mount({ id: "second", config: { ...config, initialInventory: 7 } });
-    assertEqual(first.handle.inventory, 50, "First inventory");
-    assertEqual(second.handle.inventory, 7, "Second inventory");
+    assertEqual(first.handle.inventory.available, 50, "First inventory");
+    assertEqual(second.handle.inventory.available, 7, "Second inventory");
     assert(first.root.querySelector("h2").id !== second.root.querySelector("h2").id, "Unique ids");
 });
 
@@ -251,4 +262,133 @@ test("dispose() clears the countdown interval", () => {
     assertEqual(timer.active, 1, "One interval while mounted");
     handle.dispose();
     assertEqual(timer.active, 0, "Cleared");
+});
+
+// --- T-03: reservations in the UI ---
+
+const quantityField = (root) => root.querySelector("input[name=quantity]");
+const stock = (root, bucket) => root.querySelector(`[data-inventory=${bucket}]`).textContent;
+const settle = () => new Promise((resolve) => { setTimeout(resolve, 0); });
+
+/** Type into the quantity field the way a user would (fires input). */
+function typeQuantity(root, value) {
+    const field = quantityField(root);
+    field.value = value;
+    field.dispatchEvent(new Event("input", { bubbles: true }));
+}
+
+test("a live sale shows a labelled quantity field and a Reserve submit button", () => {
+    const { root } = mount();
+    const form = root.querySelector("form[data-action=reserve-form]");
+    assert(form, "Reserve form");
+    const field = quantityField(root);
+    assertEqual(root.querySelector(`label[for="${field.id}"]`).textContent, "Quantity", "Field has a visible label");
+    assertEqual(field.type, "number", "Number field");
+    assertEqual(field.min, "1", "Min 1");
+    assertEqual(field.max, "50", "Max is the available stock");
+    assertEqual(form.querySelector("button[type=submit]").textContent, "Reserve now", "Submit button");
+    assertEqual(root.querySelectorAll("div").length, 0, "Still no div elements");
+});
+
+test("reserving shows the locked reservation, moves stock to reserved and announces the lock end", async () => {
+    const { root, handle } = mount();
+    typeQuantity(root, "2");
+    action(root).focus();
+    action(root).click();
+    assert(message(root).startsWith("Reserving 2 units"), "Processing announced at once");
+    await settle();
+    const panel = root.querySelector("section.sale-reservation");
+    assert(panel, "Reservation panel");
+    assertEqual(panel.querySelector("[data-reservation-state]").dataset.reservationState, "LOCKED", "Locked");
+    assertEqual(panel.dataset.reservationId, "reservation-1", "Reservation id");
+    assertEqual(stock(root, "available"), "48", "Available");
+    assertEqual(stock(root, "reserved"), "2", "Reserved");
+    assertEqual(stock(root, "sold"), "0", "Sold");
+    assert(message(root).startsWith("Reserved 2 units until"), "Lock end announced");
+    assertEqual(root.querySelector("form"), null, "Form replaced by the reservation");
+    assertEqual(document.activeElement, root.querySelector("[data-action=cancel]"), "Focus moved to Cancel");
+    assertEqual(handle.store.activeFor().expiresAt, START + config.lockDurationMs, "Lock end from the config");
+});
+
+test("the panel shows RESERVING while the request is processed", async () => {
+    let release;
+    const { root } = mount({}, START, { processReservation: () => new Promise((resolve) => { release = resolve; }) });
+    action(root).click();
+    await settle();
+    assertEqual(root.querySelector("[data-reservation-state]").dataset.reservationState, "RESERVING", "Reserving");
+    assert(root.querySelector("[data-action=cancel]").disabled, "Cannot cancel while reserving");
+    assertEqual(stock(root, "available"), "50", "No stock taken yet");
+    release();
+    await settle();
+    assertEqual(root.querySelector("[data-reservation-state]").dataset.reservationState, "LOCKED", "Then locked");
+});
+
+test("invalid quantities are rejected with a message and no stock change", async () => {
+    const { root } = mount({ config: { ...config, initialInventory: 3 } });
+    for (const [typed, expected] of [["0", "whole number of 1 or more"], ["", "whole number of 1 or more"], ["1.5", "whole number of 1 or more"], ["4", "Only 3 units are available."]]) {
+        typeQuantity(root, typed);
+        root.querySelector("form").dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+        await settle();
+        assert(message(root).startsWith("Could not reserve:") && message(root).includes(expected), `"${typed}": ${message(root)}`);
+        assertEqual(stock(root, "available"), "3", "Stock unchanged");
+        assertEqual(root.querySelector("section.sale-reservation"), null, "No reservation");
+    }
+});
+
+test("submitting twice while processing reserves only once", async () => {
+    let release;
+    const { root, handle } = mount({}, START, { processReservation: () => new Promise((resolve) => { release = resolve; }) });
+    typeQuantity(root, "2");
+    root.querySelector("form").dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    // Layer 1: the form is replaced by the RESERVING panel at once, so a second click has nothing to submit.
+    assertEqual(root.querySelector("form"), null, "No form while reserving");
+    // Layer 2: the store itself rejects a second request from the same shopper.
+    // Raced against a tick: if the duplicate were accepted it would wait on processing forever.
+    const error = await Promise.race([
+        handle.store.reserve({ quantity: 2, shopperId: "you" }).then(() => null, (caught) => caught),
+        settle().then(() => null)
+    ]);
+    assertEqual(error?.code, "duplicate-reservation", "Store rejects the duplicate");
+    release();
+    await settle();
+    assertEqual(handle.inventory.reserved, 2, "Reserved once");
+    assertEqual(handle.store.list().length, 1, "One reservation");
+});
+
+test("the submit event's default (page reload) is prevented", () => {
+    const { root } = mount();
+    const event = new Event("submit", { bubbles: true, cancelable: true });
+    root.querySelector("form").dispatchEvent(event);
+    assert(event.defaultPrevented, "No navigation");
+});
+
+test("cancelling returns the stock and brings the form back", async () => {
+    const { root, handle } = mount();
+    typeQuantity(root, "3");
+    action(root).click();
+    await settle();
+    root.querySelector("[data-action=cancel]").click();
+    assertEqual(stock(root, "available"), "50", "Stock back");
+    assertEqual(stock(root, "reserved"), "0", "Nothing reserved");
+    assert(message(root).startsWith("Reservation cancelled. 3 units"), "Announced");
+    assert(root.querySelector("form"), "Form is back");
+    assertEqual(handle.store.list()[0].state, "CANCELLED", "Reservation cancelled in the store");
+});
+
+test("the typed quantity survives a re-render", () => {
+    const { root, handle } = mount();
+    typeQuantity(root, "4");
+    quantityField(root).focus();
+    handle.refresh();
+    assertEqual(quantityField(root).value, "4", "Value kept");
+    assertEqual(document.activeElement, quantityField(root), "Focus kept on the field");
+});
+
+test("an active reservation stays visible when stock reaches zero", async () => {
+    const { root } = mount({ config: { ...config, initialInventory: 2 } });
+    typeQuantity(root, "2");
+    action(root).click();
+    await settle();
+    assertEqual(stock(root, "available"), "0", "Sold out for others");
+    assert(root.querySelector("section.sale-reservation"), "Your reservation is still shown");
 });

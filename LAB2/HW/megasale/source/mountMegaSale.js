@@ -1,5 +1,6 @@
 /**
- * Vietnam Mega-Sale Simulator — T-01 mount and wiring, T-02 countdown
+ * Vietnam Mega-Sale Simulator — T-01 mount and wiring, T-02 countdown,
+ * T-03 reservations
  *
  * Layout inside the mount root:
  *   <article>          product card, re-rendered when the derived view changes
@@ -8,9 +9,9 @@
  *   <section role="alert">  every configuration problem, and nothing else
  *
  * State is kept per mount in this closure (no module-level store), so two
- * simulators on one page never share data. The only stored sale value is the
- * inventory; the status is derived from the config and the injected clock
- * (options.now, default Date.now) every time the card renders.
+ * simulators on one page never share data. The campaign status is derived
+ * from the config and the injected clock (options.now, default Date.now)
+ * every time the card renders.
  *
  * Countdown (T-02): one zero-drift countdown per mount counts to the sale
  * start while UPCOMING and to the sale end while LIVE. Each tick writes only
@@ -18,6 +19,13 @@
  * when a target is reached and the status changes, and that change is
  * announced in the live region. options.timer passes setInterval,
  * clearInterval and tickMs through to the countdown for tests.
+ *
+ * Reservations (T-03): stock and reservations live in one reservation store
+ * (the authoritative in-memory controller). The UI never changes counts
+ * itself: it calls store.reserve() / store.cancel() and re-renders the card
+ * from the store's snapshots whenever the store reports a change. Outcomes
+ * and rejections are announced in the live region. options.processReservation
+ * and options.createId are passed to the store for tests.
  */
 
 import { renderToDOM } from "../../source/renderToDOM.js";
@@ -26,9 +34,12 @@ import { createElement } from "../../source/createElement.js";
 import { validateSaleConfig } from "./saleConfig.js";
 import { getCampaignStatus, SALE_STATUS } from "./saleStatus.js";
 import { createCountdown, formatDuration, remainingMs } from "./countdown.js";
-import { ProductCard, ConfigErrorView, createFormatters } from "./productCard.js";
+import { createReservationStore } from "./reservationStore.js";
+import { ReservationError } from "./reservationMachine.js";
+import { ProductCard, ConfigErrorView, createFormatters, units } from "./productCard.js";
 
 const ID_PATTERN = /^[a-z0-9-]+$/;
+const SHOPPER_ID = "you";
 
 function isPlainObject(value) {
     if (value === null || typeof value !== "object") return false;
@@ -51,11 +62,17 @@ export function mountMegaSale(root, props, options = {}) {
     if (typeof id !== "string" || !ID_PATTERN.test(id)) {
         throw new TypeError("Mega-Sale: id must use lowercase letters, digits and hyphens.");
     }
-    const { now = Date.now, timer = {} } = options;
+    const { now = Date.now, timer = {}, processReservation, createId } = options;
     if (typeof now !== "function") throw new TypeError("Mega-Sale: options.now must be a function returning epoch milliseconds.");
     if (!isPlainObject(timer)) throw new TypeError("Mega-Sale: options.timer must be a plain object.");
+    if (processReservation !== undefined && typeof processReservation !== "function") {
+        throw new TypeError("Mega-Sale: options.processReservation must be a function.");
+    }
+    if (createId !== undefined && typeof createId !== "function") {
+        throw new TypeError("Mega-Sale: options.createId must be a function.");
+    }
 
-    attachRootEventDelegation(root, ["click"]);
+    attachRootEventDelegation(root, ["click", "submit", "input"]);
 
     const result = validateSaleConfig(rawConfig);
     if (!result.ok) {
@@ -70,7 +87,8 @@ export function mountMegaSale(root, props, options = {}) {
 
     const { config } = result;
     const format = createFormatters(config.timeZone);
-    const state = { inventory: config.initialInventory };
+    // The quantity field's text, kept as typed so a re-render does not reset it.
+    const state = { quantity: "1" };
     let mounted = true;
 
     function readNow() {
@@ -79,8 +97,50 @@ export function mountMegaSale(root, props, options = {}) {
         return value;
     }
 
-    function handleReserve() {
-        setMessage("Reservations are not available in this version yet.");
+    const store = createReservationStore({
+        config,
+        now: readNow,
+        ...(processReservation ? { process: processReservation } : {}),
+        ...(createId ? { createId } : {})
+    });
+
+    function describeError(error) {
+        if (error instanceof ReservationError) return error.message;
+        console.error(error);
+        return "Something went wrong. Please try again.";
+    }
+
+    async function handleReserveSubmit(event) {
+        event.preventDefault();
+        const field = event.target.elements.quantity;
+        state.quantity = field.value;
+        // An empty or non-numeric field becomes NaN, which the store rejects.
+        const quantity = field.value.trim() === "" ? Number.NaN : Number(field.value);
+        setMessage(Number.isSafeInteger(quantity) && quantity > 0 ? `Reserving ${units(quantity)}…` : "");
+        try {
+            const reservation = await store.reserve({ quantity, shopperId: SHOPPER_ID });
+            if (!mounted) return;
+            setMessage(`Reserved ${units(reservation.quantity)} until ${format.timeWithSeconds(reservation.expiresAt)}. ` +
+                "Complete checkout before then.");
+        } catch (error) {
+            if (!mounted) return;
+            setMessage(`Could not reserve: ${describeError(error)}`);
+        }
+    }
+
+    function handleQuantityInput(event) {
+        state.quantity = event.target.value;
+    }
+
+    function handleCancel() {
+        const active = store.activeFor(SHOPPER_ID);
+        if (!active) return;
+        try {
+            const cancelled = store.cancel(active.id);
+            setMessage(`Reservation cancelled. ${units(cancelled.quantity)} went back to available stock.`);
+        } catch (error) {
+            setMessage(`Could not cancel: ${describeError(error)}`);
+        }
     }
 
     /** The fixed timestamp to count down to in a status, or null when the sale is over. */
@@ -99,10 +159,14 @@ export function mountMegaSale(root, props, options = {}) {
             id,
             config,
             status,
-            inventory: state.inventory,
+            inventory: store.inventory,
             countdownText: formatDuration(target === null ? 0 : remainingMs(target, at)),
+            reservation: store.activeFor(SHOPPER_ID),
+            quantity: state.quantity,
             format,
-            onReserve: handleReserve
+            onReserveSubmit: handleReserveSubmit,
+            onQuantityInput: handleQuantityInput,
+            onCancel: handleCancel
         });
     }
 
@@ -123,20 +187,29 @@ export function mountMegaSale(root, props, options = {}) {
         statusElement.textContent = text;
     }
 
-    /** Re-derive the status and replace the card; keeps focus on the button. */
+    /**
+     * Re-derive the view and replace the card. Focus goes back to the same
+     * control (by data-focus), else the first enabled control, else the heading.
+     */
     function refresh() {
         if (!mounted) return;
-        const hadFocus = cardElement.contains(document.activeElement);
+        const active = document.activeElement;
+        const hadFocus = cardElement.contains(active);
+        const focusKey = hadFocus ? active.dataset.focus ?? null : null;
         const next = renderToDOM(cardTree());
         cardElement.replaceWith(next);
         cardElement = next;
         countdownElement = cardElement.querySelector("[data-countdown]");
-        if (hadFocus) {
-            const button = cardElement.querySelector("[data-action=reserve]");
-            // A disabled button cannot hold focus; move it to the product heading.
-            (button.disabled ? cardElement.querySelector("h2") : button).focus();
-        }
+        if (!hadFocus) return;
+        const same = focusKey === null ? null : cardElement.querySelector(`[data-focus="${focusKey}"]`);
+        const target = (same && !same.disabled ? same : null) ??
+            cardElement.querySelector("[data-focus]:not(:disabled)") ??
+            cardElement.querySelector("h2");
+        target.focus();
     }
+
+    // Every accepted reservation change re-renders the card from the store.
+    const unsubscribe = store.subscribe(() => refresh());
 
     const countdown = createCountdown({
         ...timer,
@@ -162,13 +235,16 @@ export function mountMegaSale(root, props, options = {}) {
         ok: true,
         config,
         countdown,
+        store,
         refresh,
         get status() { return getCampaignStatus(config, readNow()); },
-        get inventory() { return state.inventory; },
+        get inventory() { return store.inventory; },
         dispose() {
             if (!mounted) return;
             mounted = false;
             countdown.dispose();
+            unsubscribe();
+            store.dispose();
             root.replaceChildren();
         }
     });

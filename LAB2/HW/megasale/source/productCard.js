@@ -1,5 +1,6 @@
 /**
- * Vietnam Mega-Sale Simulator — T-01 product card and error view, T-02 countdown line
+ * Vietnam Mega-Sale Simulator — T-01 product card and error view, T-02 countdown
+ * line, T-03 stock buckets, reserve form and reservation panel
  *
  * Pure VNode builders: they take ready-made data and return a tree for
  * renderToDOM. No state, no timers, no DOM access.
@@ -11,8 +12,16 @@
  *     <p>      countdown: label + <time role="timer"> (HH:MM:SS.mmm). The timer
  *              role is not a live region, so 20 updates a second are never read out
  *     <dl>     original price (<del>), sale price (<strong>) with discount,
- *              available units (<output>), status (<output>), sale window (<time>)
- *     <button> primary action, label and disabled state follow the status
+ *              available / reserved / sold units (<output>), status (<output>),
+ *              sale window (<time>)
+ *     one of:
+ *       <form>     LIVE, stock left, no active reservation: labelled quantity
+ *                  field and a submit button "Reserve now"
+ *       <section>  an active reservation: id, state, quantity, lock end, Cancel
+ *       <button>   otherwise: disabled, label says why (opens at…, sold out, ended)
+ *
+ * Elements that can hold focus carry data-focus, so the mount can put focus
+ * back on the same control (or the next sensible one) after a re-render.
  *
  * Prices are told apart by text, not only by styling: each one has its own
  * <dt> label ("Original price", "Sale price"), because screen readers do not
@@ -21,6 +30,7 @@
 
 import { createElement } from "../../source/createElement.js";
 import { SALE_STATUS, SALE_STATUS_LABELS } from "./saleStatus.js";
+import { RESERVATION_STATE, isActiveState } from "./reservationMachine.js";
 import { CURRENCY, DEFAULT_LOCALE, discountPercent } from "./saleConfig.js";
 
 /** Formatters for one campaign; create once per mount, not per render. */
@@ -28,10 +38,12 @@ export function createFormatters(timeZone) {
     const price = new Intl.NumberFormat(DEFAULT_LOCALE, { style: "currency", currency: CURRENCY });
     const dateTime = new Intl.DateTimeFormat(DEFAULT_LOCALE, { dateStyle: "medium", timeStyle: "medium", timeZone });
     const time = new Intl.DateTimeFormat(DEFAULT_LOCALE, { timeStyle: "short", timeZone });
+    const timeWithSeconds = new Intl.DateTimeFormat(DEFAULT_LOCALE, { timeStyle: "medium", timeZone });
     return Object.freeze({
         price: (value) => price.format(value),
         dateTime: (epochMs) => dateTime.format(epochMs),
-        time: (epochMs) => time.format(epochMs)
+        time: (epochMs) => time.format(epochMs),
+        timeWithSeconds: (epochMs) => timeWithSeconds.format(epochMs)
     });
 }
 
@@ -41,12 +53,90 @@ export const COUNTDOWN_LABELS = Object.freeze({
     [SALE_STATUS.ENDED]: "Sale ended"
 });
 
-/** Label and enabled state of the primary button for a status. */
-export function primaryAction(status, inventory, config, format) {
+export const RESERVATION_STATE_LABELS = Object.freeze({
+    [RESERVATION_STATE.IDLE]: "Not reserved",
+    [RESERVATION_STATE.RESERVING]: "Reserving…",
+    [RESERVATION_STATE.LOCKED]: "Reserved (locked)",
+    [RESERVATION_STATE.CHECKING_OUT]: "Checking out…",
+    [RESERVATION_STATE.PURCHASED]: "Purchased",
+    [RESERVATION_STATE.EXPIRED]: "Expired",
+    [RESERVATION_STATE.CANCELLED]: "Cancelled"
+});
+
+/** Label and enabled state of the primary button for a status and the units available. */
+export function primaryAction(status, available, config, format) {
     if (status === SALE_STATUS.UPCOMING) return { label: `Opens at ${format.time(config.startsAt)}`, disabled: true };
     if (status === SALE_STATUS.ENDED) return { label: "Sale ended", disabled: true };
-    if (inventory === 0) return { label: "Sold out", disabled: true };
+    if (available === 0) return { label: "Sold out", disabled: true };
     return { label: "Reserve now", disabled: false };
+}
+
+export function units(count) {
+    return `${count} ${count === 1 ? "unit" : "units"}`;
+}
+
+/** The shopper's active reservation. */
+function ReservationPanel({ id, reservation, format, onCancel }) {
+    const headingId = `${id}-reservation`;
+    const { state } = reservation;
+    return createElement("section", { className: "sale-reservation", "aria-labelledby": headingId, "data-reservation-id": reservation.id },
+        createElement("h3", { id: headingId }, "Your reservation"),
+        createElement("dl", { className: "sale-card__facts" },
+            term("Reservation", createElement("code", null, reservation.id.slice(0, 8))),
+            term("State", createElement("output", { "data-reservation-state": state }, RESERVATION_STATE_LABELS[state])),
+            term("Quantity", units(reservation.quantity)),
+            reservation.expiresAt === null
+                ? null
+                : term("Locked until", createElement("time", { datetime: new Date(reservation.expiresAt).toISOString() }, format.timeWithSeconds(reservation.expiresAt)))
+        ),
+        createElement("button", {
+            type: "button",
+            className: "sale-card__secondary",
+            "data-action": "cancel",
+            "data-focus": "cancel",
+            disabled: state !== RESERVATION_STATE.LOCKED,
+            onClick: onCancel
+        }, "Cancel reservation")
+    );
+}
+
+/** Quantity field and submit button; the field keeps what the shopper typed across re-renders. */
+function ReserveForm({ id, available, quantity, onSubmit, onQuantityInput }) {
+    const fieldId = `${id}-quantity`;
+    return createElement("form", { className: "sale-reserve", "data-action": "reserve-form", onSubmit },
+        createElement("label", { for: fieldId }, "Quantity"),
+        createElement("input", {
+            id: fieldId,
+            type: "number",
+            name: "quantity",
+            min: 1,
+            max: available,
+            step: 1,
+            value: quantity,
+            required: true,
+            "data-focus": "quantity",
+            onInput: onQuantityInput
+        }),
+        createElement("button", { type: "submit", className: "sale-card__action", "data-action": "reserve", "data-focus": "reserve" }, "Reserve now")
+    );
+}
+
+function ActionArea(view) {
+    const { id, config, status, inventory, reservation, quantity, format, onReserveSubmit, onQuantityInput, onCancel } = view;
+    if (reservation && isActiveState(reservation.state)) {
+        return ReservationPanel({ id, reservation, format, onCancel });
+    }
+    const action = primaryAction(status, inventory.available, config, format);
+    if (!action.disabled) {
+        return ReserveForm({ id, available: inventory.available, quantity, onSubmit: onReserveSubmit, onQuantityInput });
+    }
+    return createElement("button", {
+        type: "button",
+        className: "sale-card__action",
+        "data-action": "reserve",
+        "data-focus": "reserve",
+        disabled: true
+    }, action.label);
 }
 
 function term(label, ...details) {
@@ -54,13 +144,14 @@ function term(label, ...details) {
 }
 
 /**
- * view: { id, config, status, inventory, countdownText, format, onReserve }
- * config must already be validated.
+ * view: { id, config, status, inventory, countdownText, reservation, quantity,
+ *         format, onReserveSubmit, onQuantityInput, onCancel }
+ * config must already be validated; inventory is { total, available, reserved, sold };
+ * reservation is the shopper's active reservation snapshot or null.
  */
 export function ProductCard(view) {
-    const { id, config, status, inventory, countdownText, format, onReserve } = view;
+    const { id, config, status, inventory, countdownText, format } = view;
     const headingId = `${id}-product`;
-    const action = primaryAction(status, inventory, config, format);
     return createElement("article", { className: "sale-card", "aria-labelledby": headingId, "data-status": status },
         createElement("p", { className: "sale-card__campaign", lang: "vi" }, config.campaignName),
         createElement("h2", { id: headingId, className: "sale-card__name", lang: "vi", tabindex: "-1" }, config.productName),
@@ -74,7 +165,9 @@ export function ProductCard(view) {
                 createElement("strong", { className: "sale-card__price" }, format.price(config.salePrice)),
                 ` (${discountPercent(config)}% off)`
             ),
-            term("Available", createElement("output", { "data-inventory": "" }, String(inventory)), ` of ${config.initialInventory} units`),
+            term("Available", createElement("output", { "data-inventory": "available" }, String(inventory.available)), ` of ${inventory.total} units`),
+            term("Reserved", createElement("output", { "data-inventory": "reserved" }, String(inventory.reserved))),
+            term("Sold", createElement("output", { "data-inventory": "sold" }, String(inventory.sold))),
             term("Status", createElement("output", { className: "sale-card__status", "data-status-label": "" }, SALE_STATUS_LABELS[status])),
             term("Sale window",
                 createElement("time", { datetime: new Date(config.startsAt).toISOString() }, format.dateTime(config.startsAt)),
@@ -82,13 +175,7 @@ export function ProductCard(view) {
                 createElement("time", { datetime: new Date(config.endsAt).toISOString() }, format.dateTime(config.endsAt))
             )
         ),
-        createElement("button", {
-            type: "button",
-            className: "sale-card__action",
-            "data-action": "reserve",
-            disabled: action.disabled,
-            onClick: onReserve
-        }, action.label)
+        ActionArea(view)
     );
 }
 
