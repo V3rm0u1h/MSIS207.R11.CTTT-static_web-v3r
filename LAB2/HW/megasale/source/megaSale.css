@@ -1,4 +1,4 @@
-/* Vietnam Mega-Sale Simulator — presentation (T-01)
+/* Vietnam Mega-Sale Simulator — presentation (T-01, T-02 countdown)
  *
  * Contrast ratios use the WCAG 2.x relative-luminance formula, measured on
  * --sale-surface (#ffffff). Targets: text >= 4.5:1, borders/focus >= 3:1.
@@ -45,6 +45,22 @@
     outline: 2px solid var(--sale-focus);
     outline-offset: 2px;
 }
+
+.sale-countdown {
+    margin: 0 0 1rem;
+    color: var(--sale-muted);
+}
+
+/* Fixed-width digits so the millisecond counter does not jitter. */
+.sale-countdown__time {
+    display: inline-block;
+    color: var(--sale-text);
+    font-size: 1.5rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+
+.sale-card[data-status="LIVE"] .sale-countdown__time { color: var(--sale-accent); }
 
 .sale-card__facts {
     display: grid;

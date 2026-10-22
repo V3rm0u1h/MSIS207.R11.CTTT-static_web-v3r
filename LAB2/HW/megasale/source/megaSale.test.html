@@ -22,7 +22,7 @@
 <body>
   <main>
     <h1>Mega-Sale Simulator Tests</h1>
-    <p>T-01 covers the centralized campaign configuration and its validation, status derived from the schedule and the clock, the product card, the status-driven action button, the configuration error view and mounting.</p>
+    <p>T-01 covers the centralized campaign configuration and its validation, status derived from the schedule and the clock, the product card, the status-driven action button, the configuration error view and mounting. T-02 covers the zero-drift countdown: wall-clock remaining time, HH:MM:SS.mmm formatting, delayed callbacks, status changes at the target and timer cleanup.</p>
     <p id="test-summary" role="status" aria-live="polite">Running tests…</p>
     <ul id="test-results" aria-label="Test results"></ul>
     <section id="test-sandbox" aria-label="Test sandbox"></section>
@@ -32,6 +32,7 @@
     import { runTests } from "../../source/testHarness.js";
     import "./saleConfig.test.js";
     import "./mountMegaSale.test.js";
+    import "./countdown.test.js";
 
     runTests("Mega-Sale");
   </script>

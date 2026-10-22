@@ -17,27 +17,24 @@
         .demo-scenarios ul { display: flex; flex-wrap: wrap; gap: 0.25rem 1rem; margin: 0 0 1.25rem; padding: 0; list-style: none; }
         .demo-scenarios a { color: var(--sale-focus); }
         .demo-scenarios a[aria-current="page"] { font-weight: 700; color: var(--sale-text); }
-        .demo-refresh { margin: 1rem 0 0; }
-        .demo-refresh button { min-height: 2.75rem; padding: 0.5rem 1rem; border: 1px solid var(--sale-border); border-radius: 0.375rem; background: var(--sale-surface); color: var(--sale-text); font: inherit; cursor: pointer; }
-        .demo-refresh button:focus-visible { outline: 2px solid var(--sale-focus); outline-offset: 2px; }
     </style>
 </head>
 <body>
 <main>
     <header>
         <h1>Vietnam Mega-Sale Simulator</h1>
-        <p class="demo-intro">A front-end simulation of an 11.11 flash sale. The campaign status is derived from the configured schedule and the current time. Countdown, reservations and checkout come in later milestones.</p>
+        <p class="demo-intro">A front-end simulation of an 11.11 flash sale. The campaign status is derived from the configured schedule and the current time, and the countdown is recomputed from the wall clock on every update, so it never drifts. Reservations and checkout come in later milestones.</p>
     </header>
     <nav class="demo-scenarios" aria-label="Demo scenarios">
         <ul>
             <li><a href="?scenario=upcoming">Upcoming</a></li>
+            <li><a href="?scenario=soon">Starts in 5 s</a></li>
             <li><a href="?scenario=live">Live</a></li>
             <li><a href="?scenario=ended">Ended</a></li>
             <li><a href="?scenario=invalid">Invalid configuration</a></li>
         </ul>
     </nav>
     <section id="sale-root" aria-label="Flash sale"></section>
-    <p class="demo-refresh"><button type="button" id="demo-refresh">Re-check status now</button></p>
     <noscript>JavaScript must be enabled to use the simulator.</noscript>
 </main>
 <script type="module">
@@ -47,6 +44,8 @@
     const MINUTE_MS = 60 * 1000;
     const scenarios = {
         upcoming: () => createSampleConfig(Date.now()),
+        // Starts 5 s after load and ends 15 s later: watch both transitions.
+        soon: () => createSampleConfig(Date.now(), { startsInMs: 5000, durationMs: 15000 }),
         live: () => createSampleConfig(Date.now(), { startsInMs: -5 * MINUTE_MS }),
         ended: () => createSampleConfig(Date.now(), { startsInMs: -60 * MINUTE_MS }),
         // Sale price above the original, negative stock, end before start.
@@ -56,8 +55,7 @@
     const scenario = Object.hasOwn(scenarios, requested) ? requested : "upcoming";
     document.querySelector(`.demo-scenarios a[href="?scenario=${scenario}"]`).setAttribute("aria-current", "page");
 
-    const sale = mountMegaSale(document.querySelector("#sale-root"), { id: "demo-sale", config: scenarios[scenario]() });
-    document.querySelector("#demo-refresh").addEventListener("click", () => sale.refresh());
+    mountMegaSale(document.querySelector("#sale-root"), { id: "demo-sale", config: scenarios[scenario]() });
 </script>
 </body>
 </html>

@@ -16,7 +16,7 @@ python -m http.server 8765
 ```
 
 - Demo: http://localhost:8765/HW/megasale/source/megaSale.demo.html
-  (scenarios: `?scenario=upcoming`, `live`, `ended`, `invalid`)
+  (scenarios: `?scenario=upcoming`, `soon`, `live`, `ended`, `invalid`)
 - Tests: http://localhost:8765/HW/megasale/source/megaSale.test.html
 
 ## T-01 — Mega-Sale project foundation
@@ -116,3 +116,91 @@ Mutation checks (each made tests fail, then the code was restored):
 | --- | --- |
 | Status uses `now <= startsAt` (sale opens 1 ms late) | 5 |
 | Inventory check accepts any finite number | 3 |
+
+## T-02 — Zero-drift millisecond countdown
+
+Commit: `feat(timer): implement zero-drift sale countdown`
+
+| File | Change |
+| --- | --- |
+| `source/countdown.js` | `remainingMs(target, now)`, `formatDuration(ms)` (HH:MM:SS.mmm), `createCountdown({ getTarget, onTick, onReached })` with `start` / `stop` / `dispose` |
+| `source/productCard.js` | Countdown line: label plus `<time role="timer">`; sale window shows seconds |
+| `source/mountMegaSale.js` | One countdown per mount: to `startsAt` while UPCOMING, to `endsAt` while LIVE; status change at the target; `options.timer` for tests |
+| `source/megaSale.demo.html` | `?scenario=soon`: starts 5 s after load, ends 15 s later. The T-01 "Re-check status" button is gone because the countdown now updates the status |
+
+![Live countdown after the sale opened](images/t02-live-countdown.png)
+
+Key decisions:
+
+- **The wall clock is the only source of time.** Every update computes
+  `Math.max(0, target - now())`. `setInterval` (50 ms) only decides when
+  the display refreshes; nothing is counted or decremented. A test moves the
+  fake clock by 50, 13, 400 and 7 ms between ticks and checks each value is
+  exactly `target - now`. Another lets 25 minutes pass with a single
+  callback (a throttled tab or a sleeping device) and checks the display
+  reads `00:34:59.950`.
+- **`setInterval`, not `requestAnimationFrame`.** Browsers pause
+  `requestAnimationFrame` completely in background tabs. The sale would
+  then not switch to LIVE until the tab became visible again.
+  `setInterval` is throttled in background tabs (to about 1 s) but still
+  runs, and because values come from the clock, the throttling causes no
+  drift.
+- **Fixed targets.** The target is read when the countdown starts and stays
+  fixed until reached. Then `onReached` runs and `getTarget(now)` gives the
+  next one (start → end → `null`). Asking with the current time means a
+  clock jump past several targets lands on the right one in a single update.
+  After device sleep through the whole sale, the next tick goes straight to
+  "Ended" and only that is announced.
+- **Formatting.** `formatDuration` pads every field, lets hours grow past 99
+  (`100:00:00.000`), rounds milliseconds down (it never shows time that is
+  not left) and clamps negative input to `00:00:00.000`.
+- **Status update at the target.** When the start is reached, the card is
+  re-rendered once (status "Live", Reserve enabled, label "Sale ends in")
+  and the live region announces "The sale is live now…". At the end it
+  shows `Sale ended 00:00:00.000`, announces "The sale has ended." and the
+  interval is cleared. The zero before "Live" is drawn but replaced in the
+  same tick by the end countdown.
+- **No re-render per tick.** A tick writes only the `<time>` text, and only
+  when it changed. The card is replaced only at the targets. A test watches
+  the card with a `MutationObserver` for 20 ticks: same card element, and
+  every mutation is on the `<time>` element. A tick where the clock did not
+  move writes nothing.
+- **Accessibility.** The countdown is a `<time role="timer">`. The timer
+  role is not a live region, so 20 updates a second are never read aloud.
+  Screen-reader users hear the status changes from the existing
+  `role="status"` region instead. Digits use `tabular-nums` so the
+  milliseconds do not jitter.
+- **Lifecycle.** `start()` while running returns `false` and adds nothing.
+  `stop()` and `dispose()` clear the interval, and a disposed countdown never
+  restarts. The countdown is separate from inventory: it only knows the
+  config's timestamps.
+
+Tests: `source/megaSale.test.html` — 40/40 passed (headless Edge 155). The
+19 new tests use a fake clock and a manual `setInterval`. They cover
+formatting, clamping, option checks, clock-based values with irregular
+ticks, a 25-minute delayed callback, arrival at each target (zero shown once,
+reported once), a jump past several targets, one interval under repeated
+`start()`, `stop()` / `dispose()`, an ended sale that schedules nothing,
+card wiring (timer role and no live region, only the `<time>` text changes
+per tick, live and ended transitions with announcements, device sleep
+through the whole sale, `dispose()` clearing the interval), and one test
+with real timers checking that the display tracks `Date.now()` within one
+refresh.
+
+Demo check: `?scenario=soon` shows "Sale starts in 00:00:03.075" after 2 s.
+After 7 s it shows "Sale ends in 00:00:13.100" with status Live and the
+announcement in the live region. There are no console errors.
+
+Test-quality fix found here: the "no DOM mutation" checks first read
+`observer.takeRecords()` after awaiting a tick. The observer callback had
+already received the records as a microtask, so `takeRecords()` was
+always empty and the checks could never fail. They now keep the records the
+callback receives. The audio visualizer suite had the same bug and was
+fixed in its own commit (`a739d94`).
+
+Mutation checks (each made tests fail, then the code was restored):
+
+| Mutation | Failing tests |
+| --- | --- |
+| Card re-rendered on every tick | 5 |
+| Remaining time from `firstTick + updates × 50 ms` (an interval counter) instead of `Date.now()` | 8 |
