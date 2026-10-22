@@ -55,6 +55,23 @@
     font-weight: 600;
 }
 
+.audio-tracks__state {
+    color: var(--audio-muted);
+    font-weight: 400;
+}
+
+.audio-tracks__state[data-track-state="ready"] { color: var(--audio-ok); }
+.audio-tracks__state[data-track-state="error"] { color: var(--audio-error); }
+
+.audio-tracks .audio-controls {
+    margin: 0.75rem 0 0;
+}
+
+.audio-queue {
+    color: var(--audio-muted);
+    font-variant-numeric: tabular-nums;
+}
+
 .audio-tracks__button:focus-visible,
 .audio-controls__button:focus-visible {
     outline: 2px solid var(--audio-focus);

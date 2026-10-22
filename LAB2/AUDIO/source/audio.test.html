@@ -22,7 +22,7 @@
 <body>
   <main>
     <h1>Audio Engine Tests</h1>
-    <p>T-01 covers the shared AudioContext, the source → analyser → destination graph, FFT sizes, fetching and decoding (including real WAV and corrupted files), playback, error codes and the player UI.</p>
+    <p>T-01 covers the shared AudioContext, the source → analyser → destination graph, FFT sizes, fetching and decoding (including real WAV and corrupted files), playback, error codes and the player UI. T-02 covers the FIFO queue: submission order, one active job, failures that do not block, cancellation of waiting jobs and status reporting.</p>
     <p id="test-summary" role="status" aria-live="polite">Running tests…</p>
     <ul id="test-results" aria-label="Test results"></ul>
     <section id="test-sandbox" aria-label="Test sandbox"></section>
@@ -31,6 +31,7 @@
   <script type="module">
     import { runTests } from "../../HW/source/testHarness.js";
     import "./audioEngine.test.js";
+    import "./audioQueue.test.js";
     import "./mountAudioPlayer.test.js";
 
     runTests("Audio engine");

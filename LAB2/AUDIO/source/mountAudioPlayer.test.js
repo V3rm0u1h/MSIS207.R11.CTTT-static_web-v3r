@@ -2,16 +2,17 @@ import { mountAudioPlayer } from "./mountAudioPlayer.js";
 import { AudioEngineError, AUDIO_ERROR_CODES } from "./audioEngine.js";
 import { test, assert, assertEqual, assertDeepEqual, assertThrowsType, sandbox, wait } from "../../HW/source/testHarness.js";
 
-// T-01 — player UI wiring in the real DOM, with a scripted engine.
+// T-01 / T-02 — player UI wiring in the real DOM, with a scripted engine and the real FIFO queue.
 
 const tracks = [
     { id: "tone", title: "Tone", url: "tone.wav" },
-    { id: "broken", title: "<img src=x onerror=alert(1)>", url: "broken.wav" }
+    { id: "broken", title: "<img src=x onerror=alert(1)>", url: "broken.wav" },
+    { id: "low", title: "Low tone", url: "low.wav" }
 ];
 
 /** Engine double: load results are scripted per URL. */
 function scriptedEngine(results) {
-    const calls = { play: 0, stop: 0, dispose: 0 };
+    const calls = { play: 0, stop: 0, dispose: 0, load: [] };
     let playing = false;
     let onEnded = null;
     const analyser = { fftSize: 512, frequencyBinCount: 256, context: { sampleRate: 44100 } };
@@ -19,6 +20,7 @@ function scriptedEngine(results) {
         calls,
         finish() { playing = false; onEnded?.(); },
         async load(url) {
+            calls.load.push(url);
             const result = results[url];
             if (result instanceof Error) throw result;
             return result;
@@ -55,10 +57,10 @@ const settle = () => wait(0);
 
 test("renders semantic markup with no div elements", () => {
     const { root } = mount(scriptedEngine({}));
-    assertDeepEqual([...root.children].map((child) => child.tagName), ["SECTION", "P", "P", "P"], "Child order");
+    assertDeepEqual([...root.children].map((child) => child.tagName), ["SECTION", "P", "P", "P", "P"], "Child order");
     assertEqual(root.querySelectorAll("div").length, 0, "Zero div-soup");
     assertEqual(root.querySelector("section h2").textContent, "Tracks", "Heading");
-    assertEqual(root.querySelectorAll("li > button[type=button]").length, 2, "One button per track");
+    assertEqual(root.querySelectorAll("li > button[type=button]").length, 3, "One button per track");
     assertEqual(status(root).getAttribute("aria-live"), "polite", "Live region");
     assert(button(root, "[data-action=play]").disabled, "Play disabled before load");
     assert(button(root, "[data-action=stop]").disabled, "Stop disabled before play");
@@ -67,7 +69,7 @@ test("renders semantic markup with no div elements", () => {
 test("track titles are rendered as text, never parsed as HTML", () => {
     const { root } = mount(scriptedEngine({}));
     const broken = button(root, "[data-track-id=broken]");
-    assertEqual(broken.textContent, tracks[1].title, "Literal text");
+    assertEqual(broken.firstChild.nodeValue, tracks[1].title, "Literal text");
     assertEqual(broken.querySelector("img"), null, "No injected element");
 });
 
@@ -123,21 +125,93 @@ test("Play, natural end and Stop update status and buttons", async () => {
     assert(engine.calls.stop >= 1, "Engine stop called");
 });
 
-test("a slower earlier load cannot overwrite the latest selection", async () => {
-    let releaseFirst;
-    const engine = scriptedEngine({ "broken.wav": buffer });
+/** Engine whose tone.wav load waits until release() is called. */
+function slowToneEngine(results) {
+    let release;
+    const engine = scriptedEngine(results);
     const originalLoad = engine.load;
     engine.load = (url) => url === "tone.wav"
-        ? new Promise((resolve) => { releaseFirst = () => resolve(buffer); })
+        ? (engine.calls.load.push(url), new Promise((resolve) => { release = () => resolve(buffer); }))
         : originalLoad(url);
+    return { engine, release: () => release() };
+}
+const trackLabel = (root, id) => root.querySelector(`[data-track-id=${id}] [data-track-state]`);
+const queueSummary = (root) => root.querySelector("[data-queue-summary]").textContent;
+
+test("several selections are queued and loaded one at a time in order", async () => {
+    const { engine, release } = slowToneEngine({ "broken.wav": buffer, "low.wav": buffer });
     const { root, handle } = mount(engine);
     button(root, "[data-track-id=tone]").click();
     button(root, "[data-track-id=broken]").click();
+    assertDeepEqual(engine.calls.load, ["tone.wav"], "Second load waits for the first");
+    assertEqual(trackLabel(root, "tone").dataset.trackState, "loading", "First is loading");
+    assertEqual(trackLabel(root, "broken").textContent, " — waiting (#2)", "Second shows its place");
+    assert(status(root).textContent.includes("position 2"), "Selected track's place announced");
+    assertEqual(queueSummary(root), "Queue: 1 waiting, 1 loading (“Tone”) · 0 loaded, 0 failed, 0 cancelled.", "Summary");
+
+    release();
     await settle();
-    releaseFirst();
-    await settle();
-    assertEqual(handle.currentTrack.id, "broken", "Latest track kept");
+    assertDeepEqual(engine.calls.load, ["tone.wav", "broken.wav"], "FIFO order");
+    assertEqual(handle.currentTrack.id, "broken", "Latest selection kept");
     assertEqual(button(root, "[data-track-id=tone]").getAttribute("aria-pressed"), "false", "Earlier track not pressed");
+    assertEqual(trackLabel(root, "tone").dataset.trackState, "ready", "Earlier track still cached");
+    assertEqual(status(root).dataset.state, "ready", "Selected track ready");
+    assert(queueSummary(root).includes("2 loaded"), "Outcomes counted");
+});
+
+test("a failed load does not block the next queued track", async () => {
+    const error = new AudioEngineError(AUDIO_ERROR_CODES.DECODE, "The file is not a supported or valid audio format.");
+    const { root } = mount(scriptedEngine({ "broken.wav": error, "low.wav": buffer }));
+    button(root, "[data-track-id=broken]").click();
+    button(root, "[data-track-id=low]").click();
+    await settle();
+    assertEqual(trackLabel(root, "broken").dataset.trackState, "error", "Failure shown on the track");
+    assertEqual(trackLabel(root, "low").dataset.trackState, "ready", "Next track loaded");
+    assert(queueSummary(root).includes("1 loaded, 1 failed"), "Both outcomes counted");
+});
+
+test("Load all queues every unloaded track once; reselecting a loaded track reuses its buffer", async () => {
+    const engine = scriptedEngine({ "tone.wav": buffer, "broken.wav": buffer, "low.wav": buffer });
+    const { root } = mount(engine);
+    button(root, "[data-action=load-all]").click();
+    button(root, "[data-action=load-all]").click();
+    await settle();
+    assertDeepEqual(engine.calls.load, ["tone.wav", "broken.wav", "low.wav"], "Each track loaded once, in order");
+    button(root, "[data-track-id=low]").click();
+    assertEqual(engine.calls.load.length, 3, "No reload for a cached track");
+    assertEqual(status(root).dataset.state, "ready", "Ready immediately");
+    assert(!button(root, "[data-action=play]").disabled, "Play enabled");
+});
+
+test("Cancel waiting loads cancels queued tracks but not the running one", async () => {
+    const { engine, release } = slowToneEngine({ "broken.wav": buffer, "low.wav": buffer });
+    const { root } = mount(engine);
+    button(root, "[data-action=load-all]").click();
+    const clear = button(root, "[data-action=clear]");
+    assert(!clear.disabled, "Cancel enabled while tracks wait");
+    clear.click();
+    assertEqual(status(root).textContent, "Cancelled 2 waiting loads.", "Cancel announced");
+    assert(clear.disabled, "Nothing left to cancel");
+    release();
+    await settle();
+    assertDeepEqual(engine.calls.load, ["tone.wav"], "Cancelled loads never ran");
+    assertEqual(trackLabel(root, "tone").dataset.trackState, "ready", "Running load finished");
+    assertEqual(trackLabel(root, "low").dataset.trackState, "idle", "Cancelled track back to not loaded");
+    assert(queueSummary(root).includes("1 loaded, 0 failed, 2 cancelled"), "Cancelled counted");
+});
+
+test("choosing a failed track again retries it", async () => {
+    const results = { "broken.wav": new AudioEngineError(AUDIO_ERROR_CODES.NETWORK, "Could not download the track.") };
+    const engine = scriptedEngine(results);
+    const { root } = mount(engine);
+    button(root, "[data-track-id=broken]").click();
+    await settle();
+    assertEqual(status(root).dataset.state, "error", "First attempt failed");
+    results["broken.wav"] = buffer;
+    button(root, "[data-track-id=broken]").click();
+    await settle();
+    assertEqual(engine.calls.load.length, 2, "Retried");
+    assertEqual(status(root).dataset.state, "ready", "Second attempt succeeded");
 });
 
 test("Read spectrum reports the loudest bin", async () => {
