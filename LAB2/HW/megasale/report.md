@@ -16,8 +16,31 @@ python -m http.server 8765
 ```
 
 - Demo: http://localhost:8765/HW/megasale/source/megaSale.demo.html
-  (scenarios: `?scenario=upcoming`, `soon`, `live`, `ended`, `invalid`)
+  (scenarios: `?scenario=upcoming`, `soon`, `live`, `short-lock`, `ended`,
+  `invalid`; a switch below the card makes the simulated payment fail)
 - Tests: http://localhost:8765/HW/megasale/source/megaSale.test.html
+  (126 tests; the summary line at the top says how many passed)
+
+## Architecture
+
+Data flows one way: the **clock** and **user actions** go into the
+**reservation store**; the store changes reservations and stock and
+notifies; the **mount** re-renders the card from the store's snapshots
+with Mini-React. Nothing in the UI changes stock itself.
+
+| Subsystem | Files | Responsibility |
+| --- | --- | --- |
+| Campaign configuration | `source/saleConfig.js` | One frozen config: names, `productId`, prices (whole đồng), stock, `startsAt` / `endsAt` (epoch ms), `lockDurationMs`, time zone. `validateSaleConfig` lists every problem instead of throwing; `createSampleConfig(now)` builds the demo sale |
+| Campaign status | `source/saleStatus.js` | `getCampaignStatus(config, now)` → UPCOMING / LIVE / ENDED, derived each time, never stored |
+| Countdown controller | `source/countdown.js` | `formatDuration` (HH:MM:SS.mmm), `remainingMs`, `createCountdown`: one `setInterval` per countdown; every update computes `target − now()`, so there is no drift; fixed targets; `onReached` once per target |
+| Reservation state machine | `source/reservationMachine.js` | The 7 states, 8 events and the frozen table of 9 allowed transitions; `transition()` rejects everything else; `ReservationError` codes |
+| Inventory controller | `source/inventory.js` | `total = available + reserved + sold` in non-negative integers; `reserve` / `release` / `commit` move units between buckets and assert the invariant |
+| Reservation store (authority) | `source/reservationStore.js` | The single place that changes reservations and stock: `reserve`, lock expiry (one timer per lock, `expireIfDue`, `sweepExpired`), `cancel`, and the checkout workflow `checkout(id)` (eligibility → CHECKING_OUT → payment → PURCHASED / LOCKED / EXPIRED, deduplicated by id). Each operation validates and writes synchronously |
+| Checkout workflow | `source/reservationStore.js` (`checkout`, `beginCheckout`, `completeCheckout`, `failCheckout`); UI in `source/productCard.js` and `source/mountMegaSale.js` | Converts a valid lock into a purchase exactly once; failed payments keep the lock; expiry during payment releases once |
+| UI (Mini-React) | `source/productCard.js` (pure VNode builders), `source/mountMegaSale.js` (mount, event delegation, countdowns, live region, focus), `source/megaSale.css`, `source/megaSale.demo.html` | Semantic card (`article`, `dl`, `output`, `time role="timer"`, `form`, `section`, `button`); re-rendered only on store changes and status changes, never per tick; reasons for disabled actions; `role="status"` announcements |
+| Shared Mini-React core | `../source/createElement.js`, `renderToDOM.js`, `events.js`, `testHarness.js` | Unchanged except `lang` added to the attribute allow-list (T-01) |
+| Test suite | `source/megaSale.test.html` + `saleConfig.test.js`, `mountMegaSale.test.js`, `countdown.test.js`, `reservation.test.js`, `locks.test.js`, `checkout.test.js`, `integration.test.js`, `invariants.test.js`, `e2e.test.js` | 126 in-browser tests with a fake clock and manual timers (plus two real-timer tests); invariant checks on every store change; random operation sequences; race scenarios; end-to-end workflow |
+| AI failure audit | `../../../AI_FAILURE_AUDIT.md` (repository root) | Six evidence-backed failure modes from this project, and the PRD candidates that did not occur |
 
 ## T-01 — Mega-Sale project foundation
 
@@ -653,3 +676,95 @@ draft, why it is wrong, its impact, the correction and the verification:
 PRD 7's candidate failures A (drift) and C (checkout without an expiry
 check) did not occur. They are listed as "not found", with the mutation
 checks that show the tests would catch them.
+
+## T-08 — Final integration, regression testing and documentation
+
+Commit: `docs(sale): finalize mega-sale verification and documentation`
+
+No feature was added. The only code is `source/e2e.test.js`, which
+automates the PRD 8 workflow. The integration pass found no new defect;
+the T-06 defects were the last ones.
+
+**End-to-end workflow (FR-01)**, automated twice:
+
+1. On a fake clock, every step is checked exactly (`e2e.test.js`, first
+   test):
+
+| PRD 8 step | Checked |
+| --- | --- |
+| Loads with an upcoming sale | status "Upcoming", Reserve disabled |
+| Millisecond countdown | `00:01:30.500` |
+| Live at the start time | status "Live" at `startsAt` |
+| Reserve available stock | 3 units: available 7, reserved 3 |
+| Expiration timestamp | `expiresAt = startsAt + 5 min` |
+| Lock countdown | `00:05:00.000`, then `00:03:59.000` after 61 s |
+| Valid checkout → purchase | "Purchase confirmed: 3 units…", sold 3 |
+| Abandoned reservation expires | timer fires at `expiresAt`, announced, stock released |
+| Expired reservation cannot be purchased | `checkout()` → `reservation-expired` |
+| Sale ends, new reservations rejected | status "Ended", `00:00:00.000`, Reserve disabled, `reserve()` → `sale-ended` |
+| Consistent throughout | the card's numbers equal the store's and the invariant holds at each step; no interval or timer left at the end |
+
+2. On real timers, with a 0.6 s start, a 1.2 s lock and a 3.5 s sale
+   (`e2e.test.js`, second test): the sale opens, never early. A purchase
+   succeeds. An abandoned lock expires through the store's real
+   `setTimeout`, never before `expiresAt`, and releases its stock. The
+   sale closes at `00:00:00.000`. It passed in 4 consecutive runs.
+
+The demo was also checked by hand in headless Edge after each milestone:
+upcoming, `soon` (live after 5 s), `live` (reserve, checkout, failed
+payment), `short-lock` (expiry after 20 s) and `ended`, at 900 px and
+375 px, with no console errors.
+
+**Regression (FR-02).** All suites were run in headless Edge 155:
+
+| Suite | Result | Covers |
+| --- | --- | --- |
+| `HW/megasale/source/megaSale.test.html` | 126/126 | This project |
+| `HW/source/dataGrid.test.html` | 101/101 | Mini-React rendering, event delegation, semantic table, keyboard grid |
+| `HW/audio/source/audio.test.html` | 97/97 | Audio engine, queue, visualizer |
+| `EXERCISE/sources/createElement.test.html` | 18/18 | `createElement` factory |
+| `EXERCISE/sources/events.test.html` | 9/9 | Root event delegation |
+| `EXERCISE/sources/todo.test.html` | 7/7 | `useState` state management (todo app) |
+
+The shared core changed in one place for this project (`lang` in the
+`renderToDOM` allow-list, T-01). The Mega-Sale keeps state per mount and
+does not use the global `useState` store, so existing state management
+is untouched.
+
+**Documentation (FR-03, FR-04).** The architecture table at the top of
+this report lists every subsystem with its real files. Run and test
+instructions are at the top. The repository `README.md` has a Mega-Sale
+section (overview, how to run and test, decisions, limitations) below its
+original text. `AI_FAILURE_AUDIT.md` is at the repository root.
+
+**Commit history (FR-05).** The eight milestones are separate
+Conventional Commits, in order:
+
+| # | Commit | Message |
+| --- | --- | --- |
+| 1 | `c90b0a4` | `feat(sale): establish mega-sale simulation foundation` |
+| 2 | `63ca5a2` | `feat(timer): implement zero-drift sale countdown` |
+| 3 | `15c0006` | `feat(inventory): implement reservation state machine` |
+| 4 | `193b7f1` | `feat(inventory): add expiring inventory reservation locks` |
+| 5 | `ef08772` | `feat(checkout): implement reservation checkout workflow` |
+| 6 | `4d3905c` | `fix(sale): prevent timer and inventory state inconsistencies` |
+| 7 | `b741c91` | `test(sale): add invariant tests and AI failure audit` |
+| 8 | this commit | `docs(sale): finalize mega-sale verification and documentation` |
+
+The same range has three other commits:
+
+- `a739d94 test(audio): …` fixes the audio tests (audit §3).
+- `02b67d6` reuses the T-01 message, but contains `AI_AUDIT_FAILURE_2.md`
+  and audio follow-ups.
+- `0f49cbb` has a combined T-02/T-03 message, but only deletes
+  `LAB2/HW/report.md`, deletes one PDF and adds another.
+
+These last two were made outside the milestone work, and their messages do
+not describe their contents. The history was not rewritten.
+
+**Limitations.** This is a client-side simulation. Stock is consistent
+within one page's in-memory store, including several simulated shoppers
+in one page. Two tabs or two devices each have their own store. Real
+flash-sale inventory needs server-side atomic reservations, durable
+records and transactions. The payment is a timed promise, not a payment
+integration.
