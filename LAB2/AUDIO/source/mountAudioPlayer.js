@@ -1,5 +1,5 @@
 /**
- * Mini-React Audio Engine — player UI (T-01, T-02)
+ * Mini-React Audio Engine — player UI (T-01, T-02, T-03)
  *
  * Layout inside the mount root (rendered once with renderToDOM):
  *   <section>         track list (one native button per track) and queue actions
@@ -13,12 +13,18 @@
  * Every download/decode goes through the FIFO queue (T-02), one at a time;
  * the engine does the audio work and this module only turns results and
  * AudioEngineError codes into text.
+ *
+ * Stale work (T-03): choosing another track cancels the load the previous
+ * choice started (loads from "Load all" are kept). A settled load only
+ * touches the status line if its track is still selected, and Play only
+ * starts if no other track was chosen while the context resumed
+ * (selection generation). Cancellation is never shown as an error.
  */
 
 import { createElement } from "../../HW/source/createElement.js";
 import { renderToDOM } from "../../HW/source/renderToDOM.js";
 import { attachRootEventDelegation } from "../../HW/source/events.js";
-import { createAudioEngine, AudioEngineError } from "./audioEngine.js";
+import { createAudioEngine, AudioEngineError, isAbortError } from "./audioEngine.js";
 import { createJobQueue, JOB_STATUS } from "./audioQueue.js";
 
 const TRACK_ID_PATTERN = /^[a-z0-9-]+$/;
@@ -86,6 +92,10 @@ export function mountAudioPlayer(root, props, options = {}) {
     const queue = options.queue ?? createJobQueue();
 
     let currentTrack = null;
+    // Bumped on every selection; async work started earlier checks it.
+    let selectionGeneration = 0;
+    // The load the current selection started: { trackId, jobId } or null.
+    let selectionLoad = null;
     // Decoded buffers and last load errors, by track id.
     const buffers = new Map();
     const loadErrors = new Map();
@@ -111,7 +121,7 @@ export function mountAudioPlayer(root, props, options = {}) {
             ),
             createElement("p", { className: "audio-controls" },
                 createElement("button", { type: "button", className: "audio-controls__button", "data-action": "load-all", onClick: handleLoadAll }, "Load all tracks"),
-                createElement("button", { type: "button", className: "audio-controls__button", "data-action": "clear", disabled: true, onClick: handleClearPending }, "Cancel waiting loads")
+                createElement("button", { type: "button", className: "audio-controls__button", "data-action": "cancel", disabled: true, onClick: handleCancelLoads }, "Cancel loads")
             )
         );
     }
@@ -139,7 +149,7 @@ export function mountAudioPlayer(root, props, options = {}) {
 
     const playButton = controlsElement.querySelector("[data-action=play]");
     const stopButton = controlsElement.querySelector("[data-action=stop]");
-    const clearButton = trackElement.querySelector("[data-action=clear]");
+    const cancelButton = trackElement.querySelector("[data-action=cancel]");
     const sampleButton = analyserElement.querySelector("[data-action=sample]");
     const analyserInfo = analyserElement.querySelector("[data-analyser-info]");
 
@@ -175,7 +185,8 @@ export function mountAudioPlayer(root, props, options = {}) {
     function syncControls() {
         playButton.disabled = !currentTrack || !buffers.has(currentTrack.id);
         stopButton.disabled = !engine.isPlaying;
-        clearButton.disabled = queue.getQueueStatus().pending === 0;
+        const { pending, active } = queue.getQueueStatus();
+        cancelButton.disabled = pending + active === 0;
         syncTracks();
     }
 
@@ -191,12 +202,18 @@ export function mountAudioPlayer(root, props, options = {}) {
         return [`“${track.title}” is waiting in the queue (position ${queue.positionOf(track.id)}).`, "queued"];
     }
 
+    /** Queue a load unless the track is loaded or already queued. Returns the job id or null. */
     function requestLoad(track) {
-        if (buffers.has(track.id) || queue.findUnfinished(track.id)) return false;
+        if (buffers.has(track.id) || queue.findUnfinished(track.id)) return null;
         loadErrors.delete(track.id);
-        const { done } = queue.enqueue({ key: track.id, label: track.title, run: () => engine.load(track.url) });
+        const { id: jobId, done } = queue.enqueue({
+            key: track.id,
+            label: track.title,
+            // The job's own signal: cancelling this job never touches another track.
+            run: ({ signal }) => engine.load(track.url, { signal })
+        });
         done.then((job) => handleJobSettled(track, job));
-        return true;
+        return jobId;
     }
 
     function handleJobSettled(track, job) {
@@ -207,7 +224,7 @@ export function mountAudioPlayer(root, props, options = {}) {
             analyserInfo.textContent = describeAnalyser();
             sampleButton.disabled = false;
             if (selected) setStatus(`“${track.title}” is ready (${formatSeconds(job.result.duration)}). Press Play.`, "ready");
-        } else if (job.status === JOB_STATUS.ERROR) {
+        } else if (job.status === JOB_STATUS.ERROR && !isAbortError(job.error)) {
             loadErrors.set(track.id, job.error);
             if (selected) setStatus(`“${track.title}” could not be loaded: ${describeError(job.error)}`, "error");
         } else if (selected) {
@@ -228,47 +245,59 @@ export function mountAudioPlayer(root, props, options = {}) {
     });
 
     function selectTrack(track) {
-        if (track.id !== currentTrack?.id) engine.stop();
+        if (track.id !== currentTrack?.id) {
+            engine.stop();
+            selectionGeneration += 1;
+            // The previous choice's load is now stale: cancel it (no-op if finished).
+            if (selectionLoad && selectionLoad.trackId !== track.id) queue.cancel(selectionLoad.jobId);
+            selectionLoad = null;
+        }
         currentTrack = track;
         const buffer = buffers.get(track.id);
         if (buffer) {
             setStatus(`“${track.title}” is ready (${formatSeconds(buffer.duration)}). Press Play.`, "ready");
         } else {
             // Not loaded yet: queue it (a failed track is retried) or report its place.
-            requestLoad(track);
+            const jobId = requestLoad(track);
+            if (jobId !== null) selectionLoad = { trackId: track.id, jobId };
             setStatus(...describeWaiting(track));
         }
         syncControls();
     }
 
     function handleLoadAll() {
-        const added = tracks.filter(requestLoad).length;
+        const added = tracks.filter((track) => requestLoad(track) !== null).length;
         setStatus(added === 0
             ? "Every track is already loaded or waiting."
             : `Queued ${added} ${added === 1 ? "track" : "tracks"}; they load one at a time in order.`, "queued");
         syncControls();
     }
 
-    function handleClearPending() {
-        const cancelled = queue.clearPending();
-        setStatus(`Cancelled ${cancelled.length} waiting ${cancelled.length === 1 ? "load" : "loads"}.`, "idle");
+    function handleCancelLoads() {
+        const cancelled = queue.cancelAll();
+        selectionLoad = null;
+        setStatus(`Cancelled ${cancelled.length} ${cancelled.length === 1 ? "load" : "loads"}.`, "idle");
         syncControls();
     }
 
     async function handlePlay() {
         const track = currentTrack;
+        const generation = selectionGeneration;
+        const isCurrent = () => mounted && generation === selectionGeneration;
         try {
-            await engine.play(buffers.get(track?.id), {
+            const started = await engine.play(buffers.get(track?.id), {
+                isCurrent,
                 onEnded: () => {
                     if (!mounted) return;
                     setStatus(`“${track.title}” finished.`, "ready");
                     syncControls();
                 }
             });
-            if (!mounted) return;
+            // Another track was chosen while the context resumed: leave its status alone.
+            if (!started || !isCurrent()) return;
             setStatus(`Playing “${track.title}”.`, "playing");
         } catch (error) {
-            if (!mounted) return;
+            if (!isCurrent()) return;
             setStatus(describeError(error), "error");
         }
         syncControls();
@@ -298,11 +327,20 @@ export function mountAudioPlayer(root, props, options = {}) {
         queue,
         get currentTrack() { return currentTrack; },
         get buffer() { return currentTrack ? buffers.get(currentTrack.id) ?? null : null; },
+        /**
+         * Release everything this player created: cancel waiting jobs and
+         * abort the running download (queue), drop decoded buffers, empty
+         * the root, then dispose the engine. Safe to call more than once.
+         * Root click delegation stays attached: events.js has no detach and
+         * registers each root once, so remounting does not add listeners.
+         */
         async dispose() {
             if (!mounted) return;
             mounted = false;
             unsubscribe();
             queue.dispose();
+            selectionLoad = null;
+            currentTrack = null;
             buffers.clear();
             loadErrors.clear();
             root.replaceChildren();

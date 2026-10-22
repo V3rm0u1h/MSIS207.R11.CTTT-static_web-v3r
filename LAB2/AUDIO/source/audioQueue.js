@@ -1,5 +1,5 @@
 /**
- * Mini-React Audio Engine — T-02: FIFO loading and decoding queue
+ * Mini-React Audio Engine — T-02 FIFO loading queue, T-03 cancellation
  *
  * DOM-free job scheduler. Jobs start in the order they are accepted, one at
  * a time (MAX_ACTIVE_JOBS = 1), so downloads and decodes never run in
@@ -8,11 +8,15 @@
  *
  * Job lifecycle:
  *   QUEUED -> RUNNING -> SUCCESS | ERROR
- *   QUEUED -> CANCELLED            (clearPending / dispose)
+ *   QUEUED | RUNNING -> CANCELLED  (cancel / cancelAll / clearPending / dispose)
  * Terminal jobs leave the pending list and the active slot immediately; only
  * outcome counters and a short history are kept for reporting.
  *
- * Out of scope here: aborting a RUNNING job (T-03, AbortController).
+ * Cancellation (T-03): every job owns an AbortController and run() gets its
+ * signal. Cancelling a RUNNING job aborts that signal and frees the slot at
+ * once, so the next job can start; whatever run() later resolves or rejects
+ * with is stale and ignored. Work that cannot be aborted (decodeAudioData)
+ * may still finish in the background, but its result is never used.
  */
 
 export const JOB_STATUS = Object.freeze({
@@ -27,6 +31,12 @@ export const JOB_STATUS = Object.freeze({
 export const MAX_ACTIVE_JOBS = 1;
 export const DEFAULT_HISTORY_LIMIT = 20;
 
+const CHANGE_TYPES = Object.freeze({
+    [JOB_STATUS.SUCCESS]: "succeeded",
+    [JOB_STATUS.ERROR]: "failed",
+    [JOB_STATUS.CANCELLED]: "cancelled"
+});
+
 function isPlainObject(value) {
     if (value === null || typeof value !== "object") return false;
     const prototype = Object.getPrototypeOf(value);
@@ -34,13 +44,13 @@ function isPlainObject(value) {
 }
 
 /** Public, immutable view of a job. The run callback is never exposed. */
-function toSnapshot(job) {
+function toSnapshot(job, { withResult = true } = {}) {
     return Object.freeze({
         id: job.id,
         key: job.key,
         label: job.label,
         status: job.status,
-        result: job.result,
+        result: withResult ? job.result : undefined,
         error: job.error
     });
 }
@@ -91,9 +101,14 @@ export function createJobQueue(options = {}) {
         else if (status === JOB_STATUS.ERROR) counts.error += 1;
         else counts.cancelled += 1;
         const snapshot = toSnapshot(job);
-        history.push(snapshot);
+        // History must not keep large results (decoded AudioBuffers) alive.
+        history.push(toSnapshot(job, { withResult: false }));
         if (history.length > historyLimit) history.splice(0, history.length - historyLimit);
         job.settle(snapshot);
+        // The queue drops its own references; the caller owns the result now.
+        job.result = undefined;
+        job.run = null;
+        job.settle = null;
         return snapshot;
     }
 
@@ -117,7 +132,10 @@ export function createJobQueue(options = {}) {
 
         let settle;
         const done = new Promise((resolve) => { settle = resolve; });
-        const entry = { id: nextId++, key, label, run, status: JOB_STATUS.QUEUED, result: undefined, error: undefined, settle };
+        const entry = {
+            id: nextId++, key, label, run, status: JOB_STATUS.QUEUED,
+            result: undefined, error: undefined, settle, controller: new AbortController()
+        };
         pending.push(entry);
         notify({ type: "enqueued", job: toSnapshot(entry) });
         processNext();
@@ -128,6 +146,7 @@ export function createJobQueue(options = {}) {
      * Start the oldest pending job if the active slot is free. Called
      * automatically after enqueue and after every job settles; calling it
      * while a job runs does nothing. Returns true when a job was started.
+     * run() receives { signal }: the job's own AbortSignal.
      */
     function processNext() {
         if (disposed || active || pending.length === 0) return false;
@@ -137,32 +156,77 @@ export function createJobQueue(options = {}) {
         active = job;
         notify({ type: "started", job: toSnapshot(job) });
 
+        const { signal } = job.controller;
         let work;
         try {
-            work = Promise.resolve(job.run());
+            work = Promise.resolve(job.run({ signal }));
         } catch (error) {
             work = Promise.reject(error);
         }
         work.then(
-            (result) => complete(job, JOB_STATUS.SUCCESS, { result }),
-            (error) => complete(job, JOB_STATUS.ERROR, { error })
+            (result) => settleRun(job, JOB_STATUS.SUCCESS, { result }),
+            (error) => settleRun(job, JOB_STATUS.ERROR, { error })
         );
         return true;
+    }
+
+    function settleRun(job, status, outcome) {
+        // Already cancelled: this outcome is stale and the slot is already free.
+        if (job.status !== JOB_STATUS.RUNNING) return;
+        // run() ignored or rethrew the abort: still a cancellation, not a failure.
+        if (job.controller.signal.aborted) complete(job, JOB_STATUS.CANCELLED);
+        else complete(job, status, outcome);
     }
 
     function complete(job, status, outcome) {
         // Release the slot before notifying so subscribers see the true state.
         if (active === job) active = null;
         const snapshot = finish(job, status, outcome);
-        notify({ type: status === JOB_STATUS.SUCCESS ? "succeeded" : "failed", job: snapshot });
+        notify({ type: CHANGE_TYPES[status], job: snapshot });
         processNext();
     }
 
     /** Cancel every job that has not started. Returns the cancelled snapshots. */
     function clearPending() {
         if (pending.length === 0) return Object.freeze([]);
-        const cancelled = pending.splice(0).map((job) => finish(job, JOB_STATUS.CANCELLED));
+        const cancelled = pending.splice(0).map((job) => {
+            job.controller.abort();
+            return finish(job, JOB_STATUS.CANCELLED);
+        });
         notify({ type: "cleared", jobs: Object.freeze(cancelled) });
+        return Object.freeze(cancelled);
+    }
+
+    /**
+     * Cancel one job by id (number) or key (string), queued or running.
+     * Returns its cancelled snapshot, or null when nothing unfinished matched,
+     * so cancelling twice is a no-op.
+     */
+    function cancel(match) {
+        let matches;
+        if (Number.isSafeInteger(match)) matches = (job) => job.id === match;
+        else if (typeof match === "string") matches = (job) => job.key === match;
+        else throw new TypeError("Job queue: cancel() takes a job id or a job key.");
+
+        if (active && matches(active)) {
+            const job = active;
+            job.controller.abort();
+            complete(job, JOB_STATUS.CANCELLED);
+            return toSnapshot(job);
+        }
+        const index = pending.findIndex(matches);
+        if (index === -1) return null;
+        const [job] = pending.splice(index, 1);
+        job.controller.abort();
+        const snapshot = finish(job, JOB_STATUS.CANCELLED);
+        notify({ type: "cancelled", job: snapshot });
+        return snapshot;
+    }
+
+    /** Cancel waiting jobs, then the running one. Returns all cancelled snapshots. */
+    function cancelAll() {
+        const cancelled = [...clearPending()];
+        if (active) cancelled.push(cancel(active.id));
         return Object.freeze(cancelled);
     }
 
@@ -188,14 +252,11 @@ export function createJobQueue(options = {}) {
         return () => subscribers.delete(subscriber);
     }
 
-    /**
-     * Cancel pending work and stop scheduling. A job that is already running
-     * finishes on its own; T-03 adds aborting it.
-     */
+    /** Cancel all work, aborting the running job, and stop scheduling. Idempotent. */
     function dispose() {
         if (disposed) return;
-        clearPending();
         disposed = true;
+        cancelAll();
         subscribers.clear();
     }
 
@@ -203,6 +264,8 @@ export function createJobQueue(options = {}) {
         enqueue,
         processNext,
         clearPending,
+        cancel,
+        cancelAll,
         getQueueStatus,
         findUnfinished,
         positionOf,

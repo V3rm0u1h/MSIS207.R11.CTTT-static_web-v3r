@@ -1,11 +1,12 @@
 import {
     createAudioEngine,
+    isAbortError,
     AudioEngineError,
     AUDIO_ERROR_CODES,
     DEFAULT_FFT_SIZE,
     SUPPORTED_FFT_SIZES
 } from "./audioEngine.js";
-import { test, assert, assertEqual, assertDeepEqual, assertThrowsType } from "../../HW/source/testHarness.js";
+import { test, assert, assertEqual, assertDeepEqual, assertThrowsType, wait } from "../../HW/source/testHarness.js";
 
 // T-01 — Web Audio engine foundation.
 
@@ -305,6 +306,185 @@ test("play() rejects a non-function onEnded", async () => {
     let error;
     try { await engine.play(fakeBuffer(), { onEnded: "nope" }); } catch (caught) { error = caught; }
     assert(error instanceof TypeError, "TypeError");
+});
+
+// --- T-03: cancellation and resource cleanup ---
+
+/** fetch double that stays pending until the test responds, and honours abort. */
+function controllableFetch() {
+    const calls = [];
+    const fetch = (url, { signal } = {}) => new Promise((resolve, reject) => {
+        const call = { url, signal, respond: (body = new Uint8Array([1, 2, 3])) => resolve(new Response(body)) };
+        calls.push(call);
+        signal?.addEventListener("abort", () => reject(new DOMException("The operation was aborted.", "AbortError")), { once: true });
+    });
+    return { fetch, calls };
+}
+
+test("load() passes its own AbortSignal to fetch and validates the caller's signal", async () => {
+    const { fetch, calls } = controllableFetch();
+    const { engine } = fakeEngine({ engineOptions: { fetch } });
+    const pending = engine.load("a.wav");
+    assert(calls[0].signal instanceof AbortSignal, "fetch received a signal");
+    assertEqual(engine.pendingLoadCount, 1, "Load tracked");
+    calls[0].respond();
+    await pending;
+    assertEqual(engine.pendingLoadCount, 0, "Load released when done");
+    let error;
+    try { await engine.load("a.wav", { signal: "nope" }); } catch (caught) { error = caught; }
+    assert(error instanceof TypeError, "Non-signal rejected");
+});
+
+test("aborting the caller's signal aborts the download with an 'aborted' error", async () => {
+    const { fetch, calls } = controllableFetch();
+    const { engine } = fakeEngine({ engineOptions: { fetch } });
+    const controller = new AbortController();
+    const pending = engine.load("a.wav", { signal: controller.signal });
+    controller.abort();
+    assert(calls[0].signal.aborted, "Network request aborted");
+    const error = await expectAudioError(pending, AUDIO_ERROR_CODES.ABORTED);
+    assert(isAbortError(error), "Recognised as cancellation");
+    assertEqual(engine.pendingLoadCount, 0, "Controller released");
+});
+
+test("an already-aborted signal never starts a download", async () => {
+    let fetched = false;
+    const { engine } = fakeEngine({ engineOptions: { fetch: async () => { fetched = true; return okFetch(); } } });
+    await expectAudioError(engine.load("a.wav", { signal: AbortSignal.abort() }), AUDIO_ERROR_CODES.ABORTED);
+    assert(!fetched, "fetch not called");
+});
+
+test("cancelling during decode drops the decoded result instead of claiming the decode stopped", async () => {
+    const { fetch, calls } = controllableFetch();
+    const { engine, AudioContextClass } = fakeEngine({ engineOptions: { fetch } });
+    const controller = new AbortController();
+    const pending = engine.load("a.wav", { signal: controller.signal });
+    let finishDecode;
+    let decodeStarted = false;
+    AudioContextClass.instances[0].decodeAudioData = () => {
+        decodeStarted = true;
+        return new Promise((resolve) => { finishDecode = () => resolve(fakeBuffer()); });
+    };
+    calls[0].respond();
+    // Reading the response body can take a few ticks.
+    for (let tick = 0; tick < 50 && !decodeStarted; tick += 1) await wait(1);
+    assert(decodeStarted, "Decode is running");
+    controller.abort();
+    finishDecode();
+    const error = await expectAudioError(pending, AUDIO_ERROR_CODES.ABORTED);
+    assert(/decode had already started and its result was discarded/.test(error.message), "Honest message");
+});
+
+test("a failing decode after cancellation is reported as cancelled, not as a decode error", async () => {
+    const controller = new AbortController();
+    const { engine, AudioContextClass } = fakeEngine();
+    engine.getAnalyser();
+    AudioContextClass.instances[0].decodeAudioData = async () => {
+        controller.abort();
+        throw new DOMException("bad", "EncodingError");
+    };
+    await expectAudioError(engine.load("a.wav", { signal: controller.signal }), AUDIO_ERROR_CODES.ABORTED);
+});
+
+test("the engine never aborts the caller's own signal", async () => {
+    const { fetch } = controllableFetch();
+    const { engine } = fakeEngine({ engineOptions: { fetch } });
+    const controller = new AbortController();
+    const pending = engine.load("a.wav", { signal: controller.signal }).catch((error) => error);
+    await engine.dispose();
+    assert(isAbortError(await pending), "Load cancelled by dispose");
+    assert(!controller.signal.aborted, "Caller's signal untouched");
+});
+
+test("the active-source registry holds at most the playing node and empties on stop or end", async () => {
+    const { engine, AudioContextClass } = fakeEngine();
+    let ended = 0;
+    await engine.play(fakeBuffer(), { onEnded: () => { ended += 1; } });
+    const [first] = AudioContextClass.instances[0].sources;
+    const lateEndedHandler = first.onended;
+    await engine.play(fakeBuffer());
+    assertEqual(engine.activeSourceCount, 1, "Replaced node left the registry");
+    // A late "ended" from the replaced node must not touch the new one.
+    lateEndedHandler();
+    assertEqual(engine.activeSourceCount, 1, "New node still registered");
+    assertEqual(ended, 0, "Replaced track does not report ending");
+    engine.stop();
+    engine.stop();
+    assertEqual(engine.activeSourceCount, 0, "Registry empty after stop");
+    assertEqual(AudioContextClass.instances[0].sources[1].stopCalls, 1, "Stopped once, despite repeated stop()");
+    await engine.play(fakeBuffer());
+    AudioContextClass.instances[0].sources[2].onended();
+    assertEqual(engine.activeSourceCount, 0, "Natural end released the node");
+});
+
+test("play() with isCurrent returning false starts nothing", async () => {
+    const { engine, AudioContextClass } = fakeEngine({ contextOptions: { initialState: "suspended" } });
+    let current = true;
+    const started = engine.play(fakeBuffer(), { isCurrent: () => current });
+    current = false; // the user chose another track while the context resumed
+    assertEqual(await started, false, "Dropped");
+    assertEqual(AudioContextClass.instances[0].sources.length, 0, "No source created");
+    assertEqual(await engine.play(fakeBuffer(), { isCurrent: () => true }), true, "Current request plays");
+    let error;
+    try { await engine.play(fakeBuffer(), { isCurrent: true }); } catch (caught) { error = caught; }
+    assert(error instanceof TypeError, "isCurrent must be a function");
+});
+
+test("dispose() while play() waits for resume starts nothing", async () => {
+    const { engine, AudioContextClass } = fakeEngine({ contextOptions: { initialState: "suspended" } });
+    const started = engine.play(fakeBuffer());
+    const disposing = engine.dispose();
+    assertEqual(await started, false, "Play dropped");
+    await disposing;
+    assertEqual(AudioContextClass.instances[0].sources.length, 0, "No source created");
+});
+
+test("a shared context is used but never closed by the engine", async () => {
+    const SharedContext = fakeContextClass();
+    const shared = new SharedContext();
+    const engine = createAudioEngine({ context: shared, fetch: okFetch, baseUrl: "https://example.test/" });
+    assertEqual(engine.ownsContext, false, "Borrowed");
+    const analyser = engine.getAnalyser();
+    assertEqual(analyser.context, shared, "Analyser built on the shared context");
+    await engine.play(fakeBuffer());
+    await engine.dispose();
+    assert(!shared.closed, "Shared context left open");
+    assert(analyser.disconnected, "Own analyser still disconnected");
+    assert(shared.sources[0].disconnected, "Own source still released");
+    assertThrowsType(() => createAudioEngine({ context: {} }), /context must be an AudioContext/);
+});
+
+test("dispose hooks run once, survive a throwing hook, and can be unregistered", async () => {
+    const { engine } = fakeEngine();
+    const calls = [];
+    engine.onDispose(() => calls.push("frame"));
+    const unregister = engine.onDispose(() => calls.push("removed"));
+    engine.onDispose(() => { throw new Error("hook failed"); });
+    engine.onDispose(() => calls.push("listener"));
+    unregister();
+    const originalError = console.error;
+    console.error = () => {};
+    try {
+        await engine.dispose();
+        await engine.dispose();
+    } finally {
+        console.error = originalError;
+    }
+    assertDeepEqual(calls, ["frame", "listener"], "Each hook once, unregistered one skipped");
+    engine.onDispose(() => calls.push("late"));
+    assertDeepEqual(calls, ["frame", "listener", "late"], "Late hook runs immediately");
+    assertThrowsType(() => engine.onDispose("nope"), /dispose hook/);
+});
+
+test("dispose() aborts in-flight downloads", async () => {
+    const { fetch, calls } = controllableFetch();
+    const { engine } = fakeEngine({ engineOptions: { fetch } });
+    const pending = engine.load("a.wav").catch((error) => error);
+    await engine.dispose();
+    assert(calls[0].signal.aborted, "Download aborted");
+    assertEqual((await pending).code, AUDIO_ERROR_CODES.ABORTED, "Load reports cancellation");
+    assertEqual(engine.pendingLoadCount, 0, "No controllers retained");
+    await expectAudioError(engine.load("a.wav"), AUDIO_ERROR_CODES.DISPOSED);
 });
 
 // --- dispose ---

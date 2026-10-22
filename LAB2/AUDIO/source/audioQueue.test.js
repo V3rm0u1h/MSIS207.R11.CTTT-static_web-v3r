@@ -209,6 +209,132 @@ test("dispose cancels waiting jobs and refuses new ones", async () => {
     assertDeepEqual(log, ["start:running", "end:running"], "Nothing new started after dispose");
 });
 
+// --- T-03: cancellation ---
+
+/** Like deferredJob, but records the AbortSignal its run() received. */
+function signalJob(name, log) {
+    const deferred = deferredJob(name, log);
+    const run = deferred.job.run;
+    deferred.job.run = ({ signal }) => {
+        deferred.signal = signal;
+        return run();
+    };
+    return deferred;
+}
+
+test("each job's run() gets its own AbortSignal", async () => {
+    const log = [];
+    const queue = createJobQueue();
+    const a = signalJob("a", log);
+    const b = signalJob("b", log);
+    queue.enqueue(a.job);
+    queue.enqueue(b.job);
+    a.succeed();
+    await flush();
+    assert(a.signal instanceof AbortSignal && b.signal instanceof AbortSignal, "Signals passed");
+    assert(a.signal !== b.signal, "Not shared between jobs");
+    queue.cancel("b");
+    assert(b.signal.aborted, "Cancelled job's signal aborted");
+    assert(!a.signal.aborted, "Unrelated job untouched");
+});
+
+test("cancelling the running job aborts it and frees the slot at once", async () => {
+    const log = [];
+    const queue = createJobQueue();
+    const running = signalJob("running", log);
+    const next = signalJob("next", log);
+    const runningHandle = queue.enqueue(running.job);
+    queue.enqueue(next.job);
+
+    const snapshot = queue.cancel(runningHandle.id);
+    assertEqual(snapshot.status, JOB_STATUS.CANCELLED, "Cancelled snapshot");
+    assert(running.signal.aborted, "Signal aborted");
+    assertEqual(queue.getQueueStatus().current.label, "next", "Next job started without waiting");
+    assertEqual((await runningHandle.done).status, JOB_STATUS.CANCELLED, "done resolves as cancelled");
+
+    // The cancelled run finishing later (e.g. a decode that could not be aborted) is ignored.
+    running.succeed("stale buffer");
+    await flush();
+    const status = queue.getQueueStatus();
+    assertEqual(status.success, 0, "Stale result not counted");
+    assertEqual(status.cancelled, 1, "Counted once as cancelled");
+    assertEqual(status.current.label, "next", "Next job still the only active one");
+});
+
+test("a run that rejects because of its abort is CANCELLED, not ERROR", async () => {
+    const queue = createJobQueue();
+    const handle = queue.enqueue({
+        label: "aborts",
+        run: ({ signal }) => new Promise((resolve, reject) => {
+            signal.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")));
+        })
+    });
+    queue.cancelAll();
+    await flush();
+    const status = queue.getQueueStatus();
+    assertEqual((await handle.done).status, JOB_STATUS.CANCELLED, "Cancelled");
+    assertEqual(status.error, 0, "No failure recorded");
+});
+
+test("cancelling a queued job by key means it never starts", async () => {
+    const log = [];
+    const queue = createJobQueue();
+    const a = deferredJob("a", log);
+    queue.enqueue(a.job);
+    const b = queue.enqueue(deferredJob("b", log).job);
+    queue.enqueue(deferredJob("c", log).job);
+    assertEqual(queue.cancel("b").status, JOB_STATUS.CANCELLED, "b cancelled");
+    assertEqual((await b.done).status, JOB_STATUS.CANCELLED, "done resolves as cancelled");
+    a.succeed();
+    await flush();
+    assertDeepEqual(log, ["start:a", "end:a", "start:c"], "b skipped, FIFO kept for the rest");
+});
+
+test("cancel() is idempotent and type-checked", () => {
+    const queue = createJobQueue();
+    const { id } = queue.enqueue({ label: "a", run: () => new Promise(() => {}) });
+    assert(queue.cancel(id) !== null, "First cancel works");
+    assertEqual(queue.cancel(id), null, "Second cancel is a no-op");
+    assertEqual(queue.cancel("missing"), null, "Unknown key");
+    assertEqual(queue.getQueueStatus().cancelled, 1, "Counted once");
+    assertThrowsType(() => queue.cancel({}), /job id or a job key/);
+});
+
+test("cancelAll cancels waiting and running jobs; the queue stays usable", async () => {
+    const log = [];
+    const queue = createJobQueue();
+    const running = signalJob("running", log);
+    queue.enqueue(running.job);
+    queue.enqueue(deferredJob("waiting", log).job);
+    const cancelled = queue.cancelAll();
+    assertDeepEqual(cancelled.map((job) => job.label), ["waiting", "running"], "Both cancelled");
+    assert(running.signal.aborted, "Running job aborted");
+    assertEqual(queue.getQueueStatus().active + queue.getQueueStatus().pending, 0, "Queue empty");
+    assertEqual((await queue.enqueue({ label: "after", run: () => "ok" }).done).result, "ok", "New work runs");
+    assertDeepEqual(log, ["start:running"], "Waiting job never started");
+});
+
+test("dispose aborts the running job", async () => {
+    const log = [];
+    const queue = createJobQueue();
+    const running = signalJob("running", log);
+    const handle = queue.enqueue(running.job);
+    queue.dispose();
+    queue.dispose();
+    assert(running.signal.aborted, "Aborted");
+    assertEqual((await handle.done).status, JOB_STATUS.CANCELLED, "Cancelled");
+});
+
+test("history keeps outcomes but not results, so decoded buffers can be freed", async () => {
+    const queue = createJobQueue();
+    const big = new Float32Array(1024);
+    const { done } = queue.enqueue({ label: "buffer", run: () => big });
+    assertEqual((await done).result, big, "Caller receives the result");
+    const [entry] = queue.getQueueStatus().history;
+    assertEqual(entry.status, JOB_STATUS.SUCCESS, "Outcome kept");
+    assertEqual(entry.result, undefined, "Result not retained by the queue");
+});
+
 // --- Integration with the T-01 engine ---
 
 test("queued engine loads download and decode one at a time, in order", async () => {
@@ -216,7 +342,7 @@ test("queued engine loads download and decode one at a time, in order", async ()
     const queue = createJobQueue();
     const urls = ["assets/tone-a440.wav", "assets/does-not-exist.wav", "assets/corrupted.wav", "assets/tone-a220.wav"];
     try {
-        const jobs = urls.map((url) => queue.enqueue({ label: url, key: url, run: () => engine.load(url) }).done);
+        const jobs = urls.map((url) => queue.enqueue({ label: url, key: url, run: ({ signal }) => engine.load(url, { signal }) }).done);
         assertEqual(queue.getQueueStatus().active, 1, "One load at a time");
         assertEqual(queue.getQueueStatus().pending, 3, "Three loads waiting");
         const results = await Promise.all(jobs);
@@ -225,6 +351,28 @@ test("queued engine loads download and decode one at a time, in order", async ()
         assert(results[1].error instanceof AudioEngineError && results[1].error.code === AUDIO_ERROR_CODES.HTTP, "404 kept");
         assertEqual(results[2].error.code, AUDIO_ERROR_CODES.DECODE, "Decode error kept");
         assertDeepEqual(queue.getQueueStatus().history.map((job) => job.key), urls, "Finish order matches submit order");
+    } finally {
+        queue.dispose();
+        await engine.dispose();
+    }
+});
+
+test("cancelling a real in-flight download aborts it and the next real load still succeeds", async () => {
+    const engine = createAudioEngine();
+    const queue = createJobQueue();
+    try {
+        const load = (url) => queue.enqueue({ label: url, key: url, run: ({ signal }) => engine.load(url, { signal }) });
+        const first = load("assets/tone-a440.wav");
+        const second = load("assets/tone-a220.wav");
+        assertEqual(engine.pendingLoadCount, 1, "First download in flight");
+        queue.cancel(first.id);
+        assertEqual((await first.done).status, JOB_STATUS.CANCELLED, "First cancelled");
+        const secondJob = await second.done;
+        assertEqual(secondJob.status, JOB_STATUS.SUCCESS, "Queue continued");
+        assert(Math.abs(secondJob.result.duration - 4) < 0.05, "Second track decoded");
+        await wait(50);
+        assertEqual(engine.pendingLoadCount, 0, "Aborted download released");
+        assertEqual(queue.getQueueStatus().error, 0, "Cancellation is not a failure");
     } finally {
         queue.dispose();
         await engine.dispose();

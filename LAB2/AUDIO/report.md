@@ -92,3 +92,81 @@ throws do not block the queue, cancellation, history capping and
 notifications. One integration test queues four real loads (valid, 404,
 corrupted, valid) and checks the outcomes arrive in submission order. A
 mutation check (removing the single-slot guard) made 5 queue tests fail.
+
+## T-03 — Resource cleanup and request cancellation
+
+Commit: `fix(audio): prevent resource leaks and cancel stale requests`
+
+| File | Change |
+| --- | --- |
+| `source/audioEngine.js` | `load(url, { signal })`, active-source registry, `play(..., { isCurrent })`, shared-context ownership, `onDispose()` hooks, full `dispose()`, `aborted` error code and `isAbortError()` |
+| `source/audioQueue.js` | One `AbortController` per job (`run({ signal })`), `cancel(idOrKey)`, `cancelAll()`; stale outcomes ignored; history no longer keeps results |
+| `source/mountAudioPlayer.js` | Switching tracks cancels the previous choice's load; selection generation guards Play; "Cancel loads" aborts running and waiting loads; cancellation is never shown as an error |
+
+Key decisions:
+
+- **Source nodes.** Playing nodes live in an `activeSources` set. A node
+  leaves it exactly once (stop, replacement, natural `ended`, dispose):
+  its `onended` is cleared, it is stopped if still running (an
+  `InvalidStateError` from an already-stopped node is ignored) and
+  disconnected. A late `ended` event from a replaced node does nothing.
+  `stop()` and `dispose()` are safe to repeat.
+- **Abort per request.** The queue gives every job its own
+  `AbortController`. `engine.load()` makes another controller per load,
+  linked to the job's signal, and passes it to `fetch()`. The engine can
+  abort its own loads on dispose without aborting the caller's signal, and
+  cancelling one track never touches another. The link listener is removed
+  when the load ends.
+- **Decode cannot be aborted.** `decodeAudioData()` takes no signal. If
+  the signal fires while it runs, the decode is left to finish, its buffer
+  is dropped, and the load rejects with `aborted` and the message "its
+  decode had already started and its result was discarded". It never
+  claims the decode was stopped.
+- **Cancelling a running job frees the slot at once,** so the next job
+  starts without waiting for a decode that cannot be aborted. Whatever the
+  cancelled `run()` resolves or rejects with later is ignored (job status
+  is no longer `RUNNING`). Trade-off: such a decode may overlap the next
+  job's download for a moment; its result is never used.
+- **Stale results.** A settled load only changes the status line if its
+  track is still selected. Choosing another track cancels the load the
+  previous choice started (loads from "Load all" are kept, since the user
+  asked for all of them). Play captures the selection generation and
+  passes `isCurrent` to `engine.play()`, which checks it after the context
+  resumes and right before the source starts.
+- **Cancellation is not failure.** Cancelled jobs are `CANCELLED`, never
+  `ERROR`, even if `run()` rejects with an `AbortError`. The UI shows
+  "Cancelled N loads." in the normal (not error) style and never marks a
+  cancelled track as failed. `done` promises never reject, so there are no
+  unhandled rejections.
+- **Disposal.** Player `dispose()`: unsubscribe → `queue.dispose()`
+  (cancel waiting jobs, abort the running one, refuse new jobs) → drop
+  buffers → empty the root → `engine.dispose()` (abort loads, run
+  `onDispose` hooks such as the T-04 animation frame, stop sources,
+  disconnect the analyser, close the context). The queue's history keeps
+  outcomes but not results, so decoded `AudioBuffer`s can be freed.
+- **Shared context.** `createAudioEngine({ context })` borrows a context:
+  the engine disconnects its own analyser and sources but never closes the
+  borrowed context.
+- **Event listeners.** The player's only native listener is the root
+  click delegation from `HW/source/events.js`. That module has no detach
+  and registers each root once, so remounting never stacks listeners; the
+  per-element handlers live in a `WeakMap` and go away with the removed
+  elements.
+
+Tests: `source/audio.test.html` — 74/74 passed (3 runs, headless Edge 155).
+New tests cover abort during download, abort while decoding, an
+already-aborted signal, the source registry with a late `ended` event,
+repeated stop, `isCurrent` dropping a stale Play, dispose while resuming,
+shared-context ownership, dispose hooks, per-job signals, cancelling
+running and queued jobs, `cancelAll`, rapid track switching in the UI,
+Cancel loads, and player disposal with loads pending. One integration test
+cancels a real in-flight download and checks the next real load still
+decodes.
+
+Mutation checks (each made tests fail, then the code was restored):
+
+| Mutation | Failing tests |
+| --- | --- |
+| Queue accepts a cancelled job's late result | 3 |
+| UI stops passing `isCurrent` to `play()` | 1 |
+| UI stops cancelling the previous selection's load | 1 |
