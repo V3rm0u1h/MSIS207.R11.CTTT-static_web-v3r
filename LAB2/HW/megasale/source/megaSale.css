@@ -179,6 +179,30 @@
 
 .sale-reservation .sale-card__facts { margin-bottom: 1rem; }
 
+/* T-05: checkout actions and confirmation */
+.sale-reservation__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin: 0;
+}
+
+.sale-confirmation {
+    margin-bottom: 1rem;
+    padding: 1rem;
+    border: 1px solid var(--sale-border);
+    border-left: 4px solid var(--sale-live);
+    border-radius: 0.5rem;
+}
+
+.sale-confirmation h3 {
+    margin: 0 0 0.75rem;
+    color: var(--sale-live);
+    font-size: 1.125rem;
+}
+
+.sale-confirmation .sale-card__facts { margin-bottom: 0; }
+
 /* T-04: time left on the lock */
 .sale-lock {
     margin: 0 0 1rem;

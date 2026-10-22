@@ -1,6 +1,6 @@
 /**
  * Vietnam Mega-Sale Simulator — T-03 authoritative reservation controller,
- * T-04 expiring locks
+ * T-04 expiring locks, T-05 checkout workflow
  *
  * The one place that changes reservations and stock for a campaign. The UI
  * only calls these methods and renders the snapshots they return.
@@ -34,6 +34,24 @@
  * - sweepExpired() expires every lock that is due. reserve() calls it first,
  *   so stock from abandoned locks is free again even if a timer was delayed.
  *
+ * Checkout (T-05): checkout(id) is the workflow entry point.
+ *   1. eligibility: the reservation exists, is LOCKED (not purchased,
+ *      cancelled or expired), now < expiresAt, its quantity is a positive
+ *      whole number covered by reserved stock, and it belongs to this
+ *      campaign's product and was made during the sale. A lock made during the
+ *      sale stays valid after the sale ends, until its own expiry.
+ *   2. LOCKED -> CHECKING_OUT (the expiry timer is disarmed)
+ *   3. the simulated payment step runs (processCheckout)
+ *   4. success: completeCheckout() re-checks the expiry, then moves the
+ *      reserved units to sold and CHECKING_OUT -> PURCHASED in one
+ *      synchronous step. Failure: CHECKING_OUT -> LOCKED with the stock still
+ *      reserved (the timer re-armed), or EXPIRED with the stock released once
+ *      if the lock ran out meanwhile.
+ * Calls for a reservation that is already checking out return the same
+ * promise (deduplicated by reservation id), so repeated submissions cannot
+ * sell the same units twice. A purchased reservation is rejected with
+ * "already-purchased".
+ *
  * Every method that changes stock is synchronous from its last validation to
  * its last write: the state is checked, the transition applied and the
  * inventory moved with no await in between, so no other operation can run in
@@ -56,6 +74,7 @@ import {
 } from "./reservationMachine.js";
 
 export const DEFAULT_PROCESSING_MS = 400;
+export const DEFAULT_CHECKOUT_MS = 600;
 const SHOPPER_ID_PATTERN = /^[a-z0-9-]+$/;
 
 function isPlainObject(value) {
@@ -77,9 +96,11 @@ const wait = (ms) => new Promise((resolve) => { setTimeout(resolve, ms); });
 
 /**
  * options.config: a validated sale config (from validateSaleConfig).
- * options.now, createId, process, setTimeout and clearTimeout exist for
- * tests. process(snapshot) is the simulated server round trip while
- * RESERVING; it defaults to a 400 ms wait.
+ * options.now, createId, process, processCheckout, setTimeout and
+ * clearTimeout exist for tests. process(snapshot) is the simulated server
+ * round trip while RESERVING (default: a 400 ms wait); processCheckout(snapshot)
+ * is the simulated payment while CHECKING_OUT (default: a 600 ms wait). A
+ * rejected processCheckout is a failed payment.
  */
 export function createReservationStore(options) {
     if (!isPlainObject(options)) throw new TypeError("Reservation store: options must be a plain object.");
@@ -88,13 +109,14 @@ export function createReservationStore(options) {
         now = Date.now,
         createId = defaultIdFactory(),
         process = () => wait(DEFAULT_PROCESSING_MS),
+        processCheckout = () => wait(DEFAULT_CHECKOUT_MS),
         setTimeout: setTimeoutFn = globalThis.setTimeout?.bind(globalThis),
         clearTimeout: clearTimeoutFn = globalThis.clearTimeout?.bind(globalThis)
     } = options;
     if (!isPlainObject(config) || !Object.isFrozen(config)) {
         throw new TypeError("Reservation store: config must be a validated (frozen) sale config.");
     }
-    for (const [name, value] of Object.entries({ now, createId, process, setTimeout: setTimeoutFn, clearTimeout: clearTimeoutFn })) {
+    for (const [name, value] of Object.entries({ now, createId, process, processCheckout, setTimeout: setTimeoutFn, clearTimeout: clearTimeoutFn })) {
         if (typeof value !== "function") throw new TypeError(`Reservation store: ${name} must be a function.`);
     }
 
@@ -103,6 +125,8 @@ export function createReservationStore(options) {
     const listeners = new Set();
     // Reservation id -> pending expiry timer handle; only LOCKED reservations have one.
     const expiryTimers = new Map();
+    // Reservation id -> the promise of its checkout in progress (deduplication).
+    const checkoutsInFlight = new Map();
     let disposed = false;
 
     function readNow() {
@@ -264,7 +288,8 @@ export function createReservationStore(options) {
             expiresAt: null,
             updatedAt: at,
             state: S.IDLE,
-            failure: null
+            failure: null,
+            purchasedAt: null
         };
         reservations.set(id, record);
         const reserving = apply(record, E.REQUEST);
@@ -314,7 +339,7 @@ export function createReservationStore(options) {
         }
         transition(record.state, E.CHECKOUT_SUCCEED);
         inventory.commit(record.quantity);
-        return apply(record, E.CHECKOUT_SUCCEED);
+        return apply(record, E.CHECKOUT_SUCCEED, { purchasedAt: readNow() });
     }
 
     /** CHECKING_OUT -> LOCKED while the lock is still valid, otherwise EXPIRED. */
@@ -350,6 +375,67 @@ export function createReservationStore(options) {
         return Object.freeze({ expired, reservation: snapshot(record) });
     }
 
+    // --- Checkout workflow ---
+
+    /** Every rule a checkout must pass before LOCKED -> CHECKING_OUT. Throws a ReservationError. */
+    function assertCheckoutEligible(record, at) {
+        if (record.state === S.PURCHASED) {
+            throw new ReservationError(CODES.ALREADY_PURCHASED, "This reservation has already been purchased.");
+        }
+        if (record.state === S.CANCELLED) {
+            throw new ReservationError(CODES.INVALID_TRANSITION, "This reservation was cancelled. Reserve the product again.");
+        }
+        if (record.state === S.EXPIRED || expireLockIfDue(record, at)) {
+            throw new ReservationError(CODES.EXPIRED, "Your reservation has expired and the stock was released.");
+        }
+        if (record.state !== S.LOCKED) {
+            throw new ReservationError(CODES.INVALID_TRANSITION, "Checkout needs an active reservation. Reserve the product first.");
+        }
+        if (!Number.isSafeInteger(record.quantity) || record.quantity <= 0 || record.quantity > inventory.snapshot().reserved) {
+            throw new ReservationError(CODES.NOT_ELIGIBLE, "The reserved quantity is not valid for checkout.");
+        }
+        if (record.productId !== config.productId || record.createdAt < config.startsAt || record.createdAt >= config.endsAt) {
+            throw new ReservationError(CODES.NOT_ELIGIBLE, "This reservation does not belong to this sale.");
+        }
+    }
+
+    /**
+     * Run the whole checkout for a reservation. Resolves with the PURCHASED
+     * snapshot; rejects with a ReservationError (expired, checkout-failed,
+     * already-purchased, …). Calls during a checkout get the same promise.
+     */
+    function checkout(id) {
+        if (checkoutsInFlight.has(id)) return checkoutsInFlight.get(id);
+        let checkingOut;
+        try {
+            assertUsable();
+            const record = find(id);
+            assertCheckoutEligible(record, readNow());
+            checkingOut = apply(record, E.CHECKOUT);
+        } catch (error) {
+            return Promise.reject(error);
+        }
+        const run = (async () => {
+            try {
+                await processCheckout(checkingOut);
+            } catch (cause) {
+                if (disposed) throw new ReservationError(CODES.DISPOSED, "The sale simulator has been closed.");
+                const after = failCheckout(id);
+                if (after.state === S.EXPIRED) {
+                    throw new ReservationError(CODES.EXPIRED, "Your reservation expired during checkout; its stock was released.", { cause });
+                }
+                throw new ReservationError(CODES.CHECKOUT_FAILED,
+                    "The payment did not go through. Your reservation is still held, so you can try again before it expires.", { cause });
+            }
+            if (disposed) throw new ReservationError(CODES.DISPOSED, "The sale simulator has been closed.");
+            return completeCheckout(id);
+        })();
+        checkoutsInFlight.set(id, run);
+        const forget = () => checkoutsInFlight.delete(id);
+        run.then(forget, forget);
+        return run;
+    }
+
     function subscribe(listener) {
         if (typeof listener !== "function") throw new TypeError("Reservation store: listener must be a function.");
         listeners.add(listener);
@@ -358,6 +444,7 @@ export function createReservationStore(options) {
 
     return Object.freeze({
         reserve,
+        checkout,
         beginCheckout,
         completeCheckout,
         failCheckout,

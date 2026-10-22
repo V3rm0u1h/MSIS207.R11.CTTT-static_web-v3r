@@ -17,13 +17,15 @@
         .demo-scenarios ul { display: flex; flex-wrap: wrap; gap: 0.25rem 1rem; margin: 0 0 1.25rem; padding: 0; list-style: none; }
         .demo-scenarios a { color: var(--sale-focus); }
         .demo-scenarios a[aria-current="page"] { font-weight: 700; color: var(--sale-text); }
+        .demo-switch { margin: 1rem 0 0; }
+        .demo-switch input { width: 1.25rem; height: 1.25rem; vertical-align: middle; }
     </style>
 </head>
 <body>
 <main>
     <header>
         <h1>Vietnam Mega-Sale Simulator</h1>
-        <p class="demo-intro">A front-end simulation of an 11.11 flash sale. The campaign status is derived from the configured schedule and the current time, and the countdown is recomputed from the wall clock on every update, so it never drifts. While the sale is live you can reserve units: they are locked for you for a few minutes, tracked by a reservation state machine. Checkout comes in a later milestone.</p>
+        <p class="demo-intro">A front-end simulation of an 11.11 flash sale. The campaign status is derived from the configured schedule and the current time, and the countdown is recomputed from the wall clock on every update, so it never drifts. While the sale is live you can reserve units: they are locked for you for a few minutes, tracked by a reservation state machine. Check out before the lock expires; the switch below makes the simulated payment fail.</p>
     </header>
     <nav class="demo-scenarios" aria-label="Demo scenarios">
         <ul>
@@ -36,6 +38,7 @@
         </ul>
     </nav>
     <section id="sale-root" aria-label="Flash sale"></section>
+    <p class="demo-switch"><label><input type="checkbox" id="demo-fail-payment"> Simulate a failed payment</label></p>
     <noscript>JavaScript must be enabled to use the simulator.</noscript>
 </main>
 <script type="module">
@@ -58,7 +61,12 @@
     const scenario = Object.hasOwn(scenarios, requested) ? requested : "upcoming";
     document.querySelector(`.demo-scenarios a[href="?scenario=${scenario}"]`).setAttribute("aria-current", "page");
 
-    mountMegaSale(document.querySelector("#sale-root"), { id: "demo-sale", config: scenarios[scenario]() });
+    const failPayment = document.querySelector("#demo-fail-payment");
+    // Simulated payment: 600 ms, rejected when the switch is on.
+    const processCheckout = () => new Promise((resolve, reject) => {
+        setTimeout(() => (failPayment.checked ? reject(new Error("Simulated payment failure")) : resolve()), 600);
+    });
+    mountMegaSale(document.querySelector("#sale-root"), { id: "demo-sale", config: scenarios[scenario]() }, { processCheckout });
 </script>
 </body>
 </html>

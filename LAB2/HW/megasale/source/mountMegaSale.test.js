@@ -29,6 +29,7 @@ function mount(props = {}, at = START, options = {}) {
             clearTimeout: timer.clearTimeout
         },
         processReservation: () => Promise.resolve(),
+        processCheckout: () => Promise.resolve(),
         createId: () => `reservation-${++sequence}`,
         ...options
     });
@@ -311,7 +312,7 @@ test("reserving shows the locked reservation, moves stock to reserved and announ
     assertEqual(stock(root, "sold"), "0", "Sold");
     assert(message(root).startsWith("Reserved 2 units until"), "Lock end announced");
     assertEqual(root.querySelector("form"), null, "Form replaced by the reservation");
-    assertEqual(document.activeElement, root.querySelector("[data-action=cancel]"), "Focus moved to Cancel");
+    assertEqual(document.activeElement, root.querySelector("[data-action=checkout]"), "Focus moved to Checkout, the next step");
     assertEqual(handle.store.activeFor().expiresAt, START + config.lockDurationMs, "Lock end from the config");
 });
 
@@ -451,4 +452,99 @@ test("the lock countdown stops when the reservation is cancelled", async () => {
     root.querySelector("[data-action=cancel]").click();
     assertEqual(timer.active, 1, "Only the sale countdown remains");
     assertEqual(timer.pendingTimeouts, 0, "Store expiry timer cleared");
+});
+
+// --- T-05: checkout in the UI ---
+
+const checkoutButton = (root) => root.querySelector("[data-action=checkout]");
+
+/** Mount with payments the test settles: payments.pay() / payments.decline(). */
+function mountWithPayments() {
+    const queue = [];
+    const mounted = mount({}, START, {
+        processCheckout: () => new Promise((resolve, reject) => { queue.push({ resolve, reject }); })
+    });
+    return {
+        ...mounted,
+        payments: {
+            pay: () => queue.shift().resolve(),
+            decline: () => queue.shift().reject(new Error("card declined")),
+            get waiting() { return queue.length; }
+        }
+    };
+}
+
+test("checkout shows progress, disables its button, then confirms the purchase", async () => {
+    const { root, payments } = mountWithPayments();
+    await reserveUnits(root, "2");
+    checkoutButton(root).click();
+    assert(message(root).startsWith("Processing payment for 2 units"), "In progress announced");
+    assertEqual(root.querySelector("[data-reservation-state]").dataset.reservationState, "CHECKING_OUT", "State shown");
+    assert(checkoutButton(root).disabled, "Checkout disabled while processing");
+    assertEqual(checkoutButton(root).textContent, "Processing payment…", "Button explains");
+    assert(root.querySelector("[data-action=cancel]").disabled, "Cancel disabled while processing");
+    payments.pay();
+    await settle();
+    const confirmation = root.querySelector("section.sale-confirmation");
+    assert(confirmation, "Confirmation shown");
+    assertEqual(confirmation.querySelector("h3").textContent, "Purchase confirmed", "Heading");
+    assertEqual(stock(root, "sold"), "2", "Sold");
+    assertEqual(stock(root, "reserved"), "0", "Nothing reserved");
+    assert(/^Purchase confirmed: 2 units for 1\.598\.000/.test(message(root)), `Announced: ${message(root)}`);
+    assertEqual(root.querySelector("section.sale-reservation"), null, "Reservation panel gone");
+});
+
+test("rapid checkout clicks pay and sell once", async () => {
+    const { root, payments, handle } = mountWithPayments();
+    await reserveUnits(root, "1");
+    const button = checkoutButton(root);
+    button.click();
+    button.click(); // the old button is no longer in the page
+    checkoutButton(root).click(); // the new one is disabled
+    assertEqual(payments.waiting, 1, "One payment started");
+    payments.pay();
+    await settle();
+    assertEqual(handle.inventory.sold, 1, "Sold once");
+});
+
+test("a failed payment keeps the reservation, explains, and allows a retry", async () => {
+    const { root, payments } = mountWithPayments();
+    await reserveUnits(root, "2");
+    checkoutButton(root).click();
+    payments.decline();
+    await settle();
+    assert(message(root).startsWith("Checkout failed: The payment did not go through."), `Explained: ${message(root)}`);
+    assertEqual(root.querySelector("[data-reservation-state]").dataset.reservationState, "LOCKED", "Still locked");
+    assertEqual(stock(root, "reserved"), "2", "Still reserved");
+    assertEqual(root.querySelector("section.sale-confirmation"), null, "No purchase shown");
+    assert(!checkoutButton(root).disabled, "Retry possible");
+    checkoutButton(root).click();
+    payments.pay();
+    await settle();
+    assertEqual(stock(root, "sold"), "2", "Retry succeeded");
+});
+
+test("a checkout that outlives the lock reports the expiry and shows no purchase", async () => {
+    const { root, payments, clock, handle } = mountWithPayments();
+    await reserveUnits(root, "3");
+    const { expiresAt } = handle.store.activeFor();
+    checkoutButton(root).click();
+    clock.now = expiresAt;
+    payments.pay();
+    await settle();
+    assert(message(root).startsWith("Checkout failed: Your reservation expired"), `Explained: ${message(root)}`);
+    assertEqual(root.querySelector("section.sale-confirmation"), null, "No purchase");
+    assertEqual(stock(root, "available"), "50", "Stock released");
+    assertEqual(stock(root, "sold"), "0", "Nothing sold");
+});
+
+test("the confirmation stays until the next reservation starts", async () => {
+    const { root } = mount();
+    await reserveUnits(root, "1");
+    checkoutButton(root).click();
+    await settle();
+    assert(root.querySelector("section.sale-confirmation"), "Shown after purchase");
+    assert(root.querySelector("form"), "Can buy again");
+    await reserveUnits(root, "1");
+    assertEqual(root.querySelector("section.sale-confirmation"), null, "Cleared by the new reservation");
 });

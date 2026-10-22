@@ -412,3 +412,86 @@ Mutation checks (each made tests fail, then the code was restored):
 | Timer callback skips the identity / state check | 3 |
 | `reserve()` does not sweep due locks first | 1 |
 | Re-armed timer gets a fresh full lock duration | 2 |
+
+## T-05 — Checkout workflow and reservation finalization
+
+Commit: `feat(checkout): implement reservation checkout workflow`
+
+| File | Change |
+| --- | --- |
+| `source/reservationStore.js` | `checkout(id)`: eligibility checks, `LOCKED → CHECKING_OUT`, simulated payment (`processCheckout`), then purchase or failure; deduplicated by reservation id; `purchasedAt` recorded |
+| `source/reservationMachine.js` | New error codes `already-purchased`, `checkout-failed`, `not-eligible` |
+| `source/productCard.js` | Checkout button (disabled unless LOCKED, "Processing payment…" while CHECKING_OUT), total price, purchase confirmation section |
+| `source/mountMegaSale.js` | Checkout handler; announcements for every outcome; the confirmation follows store events |
+| `source/megaSale.demo.html` | "Simulate a failed payment" switch (outside the simulator) that makes the 600 ms payment reject |
+
+![Purchase confirmed](images/t05-purchased.png)
+
+Key decisions:
+
+- **Eligibility, all checked before CHECKING_OUT.** The reservation exists
+  (`not-found`). It is not purchased (`already-purchased`), cancelled
+  (`invalid-transition`) or expired. It is LOCKED and `now < expiresAt`
+  (a due lock is expired on the spot: `reservation-expired`). Its quantity
+  is a positive whole number covered by reserved stock. It belongs to this
+  campaign's product and was created during the sale (`not-eligible`).
+  The public API cannot create a reservation that fails the last two
+  checks; they are defensive and not covered by a test.
+- **Campaign rule.** A lock made during the sale stays valid after the
+  sale ends, until its own expiry. The campaign end does not void reserved
+  stock (PRD 6 FR-01), and a test checks out 1 s after the end.
+- **One logical operation.** `completeCheckout` re-checks the expiry, then
+  validates the transition, moves reserved → sold and applies
+  `CHECKING_OUT → PURCHASED` synchronously. A payment that returns after
+  `expiresAt` therefore ends `EXPIRED` with the stock released once, and
+  nothing is sold.
+- **Failed payment.** `CHECKING_OUT → LOCKED` with the units still
+  reserved; the expiry timer is re-armed for the original expiry. The error
+  is `checkout-failed` with the payment error as `cause`, and the shopper
+  can try again before the lock runs out. A failure after the lock ran out
+  ends `EXPIRED`, not LOCKED.
+- **Duplicate submissions.** `checkout(id)` keeps the promise of a checkout
+  in progress per reservation id; further calls get the same promise, so
+  there is one payment and one sale. After the purchase, another call is
+  refused with `already-purchased`. In the UI the Checkout button is also
+  disabled the moment the state becomes CHECKING_OUT. A mutation that
+  leaves it enabled still sells only once, because the store deduplicates.
+- **No cancel during payment.** `CHECKING_OUT` has no CANCEL transition;
+  the payment's outcome decides the stock.
+- **Feedback.** The live region reports "Processing payment for 2 units…",
+  "Purchase confirmed: 2 units for 1.598.000 ₫.", "Checkout failed: The
+  payment did not go through. Your reservation is still held, so you can
+  try again before it expires.", "Checkout failed: Your reservation expired
+  …", "Your reservation expired…" (timer) and "Reservation cancelled…". The
+  reservation panel shows the state ("Checking out…") and the total. After
+  a purchase, a "Purchase confirmed" section (order, quantity, total paid,
+  time) stays until the next reservation request. It is driven by the
+  store's `CHECKOUT_SUCCEED` event, not by the click handler.
+
+Tests: `source/megaSale.test.html` — 105/105 passed (headless Edge 155). Nine
+store tests cover: the full checkout; ineligible reservations (unknown,
+cancelled, already purchased, expired at `expiresAt`) with no stock change;
+checkout after the campaign ends; three rapid submissions returning one
+promise with one payment and one sale; a failed payment returning to LOCKED
+with stock reserved and the timer re-armed, then a successful retry; a lock
+expiring during payment; a failed payment after the lock ran out; no
+cancel mid-payment; and purchased units surviving sweeps and late timers.
+Every store change is checked against the invariant. Five UI tests cover
+progress, the disabled button and confirmation; rapid clicks; failure and
+retry; checkout outliving the lock; and the confirmation clearing on the
+next reservation.
+
+Demo check (`?scenario=live`): reserving and checking out shows "Purchase
+confirmed" with Sold 1. With the failed-payment switch on, the reservation
+stays LOCKED and the live region explains that it is still held. There are
+no console errors.
+
+Mutation checks (each made tests fail, then the code was restored):
+
+| Mutation | Failing tests |
+| --- | --- |
+| No deduplication of checkout by reservation id | 1 |
+| `completeCheckout` does not re-check the expiry | 3 |
+| Failed payment always returns to LOCKED | 1 |
+| Stock committed before the transition is validated | 2 |
+| Checkout button stays enabled while CHECKING_OUT | 1 |

@@ -1,6 +1,6 @@
 /**
  * Vietnam Mega-Sale Simulator — T-01 mount and wiring, T-02 countdown,
- * T-03 reservations, T-04 lock countdown
+ * T-03 reservations, T-04 lock countdown, T-05 checkout
  *
  * Layout inside the mount root:
  *   <article>          product card, re-rendered when the derived view changes
@@ -33,6 +33,13 @@
  * expiresAt it asks the store to expireIfDue() that same reservation, which
  * is harmless if the store's timer already did. options.timer.setTimeout and
  * clearTimeout are passed to the store for tests.
+ *
+ * Checkout (T-05): the Checkout button calls store.checkout(id). The store
+ * runs the eligibility checks, the simulated payment and the final
+ * reserved -> sold move; the card follows its state (the button is disabled
+ * while CHECKING_OUT) and the live region reports in progress, purchase,
+ * expired, failed and cancelled outcomes. options.processCheckout is passed
+ * to the store (tests, and the demo's "failed payment" switch).
  */
 
 import { renderToDOM } from "../../source/renderToDOM.js";
@@ -70,11 +77,14 @@ export function mountMegaSale(root, props, options = {}) {
     if (typeof id !== "string" || !ID_PATTERN.test(id)) {
         throw new TypeError("Mega-Sale: id must use lowercase letters, digits and hyphens.");
     }
-    const { now = Date.now, timer = {}, processReservation, createId } = options;
+    const { now = Date.now, timer = {}, processReservation, processCheckout, createId } = options;
     if (typeof now !== "function") throw new TypeError("Mega-Sale: options.now must be a function returning epoch milliseconds.");
     if (!isPlainObject(timer)) throw new TypeError("Mega-Sale: options.timer must be a plain object.");
     if (processReservation !== undefined && typeof processReservation !== "function") {
         throw new TypeError("Mega-Sale: options.processReservation must be a function.");
+    }
+    if (processCheckout !== undefined && typeof processCheckout !== "function") {
+        throw new TypeError("Mega-Sale: options.processCheckout must be a function.");
     }
     if (createId !== undefined && typeof createId !== "function") {
         throw new TypeError("Mega-Sale: options.createId must be a function.");
@@ -96,7 +106,8 @@ export function mountMegaSale(root, props, options = {}) {
     const { config } = result;
     const format = createFormatters(config.timeZone);
     // The quantity field's text, kept as typed so a re-render does not reset it.
-    const state = { quantity: "1" };
+    // lastPurchase: the shopper's latest PURCHASED snapshot, shown as a confirmation.
+    const state = { quantity: "1", lastPurchase: null };
     let mounted = true;
 
     function readNow() {
@@ -109,6 +120,7 @@ export function mountMegaSale(root, props, options = {}) {
         config,
         now: readNow,
         ...(processReservation ? { process: processReservation } : {}),
+        ...(processCheckout ? { processCheckout } : {}),
         ...(createId ? { createId } : {}),
         ...(timer.setTimeout ? { setTimeout: timer.setTimeout } : {}),
         ...(timer.clearTimeout ? { clearTimeout: timer.clearTimeout } : {})
@@ -140,6 +152,20 @@ export function mountMegaSale(root, props, options = {}) {
 
     function handleQuantityInput(event) {
         state.quantity = event.target.value;
+    }
+
+    async function handleCheckout() {
+        const active = store.activeFor(SHOPPER_ID);
+        if (!active) return;
+        setMessage(`Processing payment for ${units(active.quantity)}…`);
+        try {
+            const purchase = await store.checkout(active.id);
+            if (!mounted) return;
+            setMessage(`Purchase confirmed: ${units(purchase.quantity)} for ${format.price(purchase.quantity * config.salePrice)}.`);
+        } catch (error) {
+            if (!mounted) return;
+            setMessage(`Checkout failed: ${describeError(error)}`);
+        }
     }
 
     function handleCancel() {
@@ -180,10 +206,12 @@ export function mountMegaSale(root, props, options = {}) {
             countdownText: formatDuration(target === null ? 0 : remainingMs(target, at)),
             reservation,
             lockText: formatDuration(lockAt === null ? 0 : remainingMs(lockAt, at)),
+            purchase: state.lastPurchase,
             quantity: state.quantity,
             format,
             onReserveSubmit: handleReserveSubmit,
             onQuantityInput: handleQuantityInput,
+            onCheckout: handleCheckout,
             onCancel: handleCancel
         });
     }
@@ -255,6 +283,11 @@ export function mountMegaSale(root, props, options = {}) {
     // Every accepted reservation change re-renders the card from the store and
     // restarts the lock countdown for whatever reservation is now active.
     const unsubscribe = store.subscribe((change) => {
+        if (change.reservation.shopperId === SHOPPER_ID) {
+            // The confirmation shows the latest purchase until a new reservation starts.
+            if (change.type === RESERVATION_EVENT.CHECKOUT_SUCCEED) state.lastPurchase = change.reservation;
+            if (change.type === RESERVATION_EVENT.REQUEST) state.lastPurchase = null;
+        }
         refresh();
         if (change.type === RESERVATION_EVENT.EXPIRE && change.reservation.shopperId === SHOPPER_ID) {
             setMessage(`Your reservation expired. ${units(change.reservation.quantity)} went back to available stock.`);

@@ -1,6 +1,7 @@
 /**
  * Vietnam Mega-Sale Simulator — T-01 product card and error view, T-02 countdown
- * line, T-03 stock buckets, reserve form and reservation panel, T-04 lock countdown
+ * line, T-03 stock buckets, reserve form and reservation panel, T-04 lock countdown,
+ * T-05 checkout button and purchase confirmation
  *
  * Pure VNode builders: they take ready-made data and return a tree for
  * renderToDOM. No state, no timers, no DOM access.
@@ -17,8 +18,10 @@
  *     one of:
  *       <form>     LIVE, stock left, no active reservation: labelled quantity
  *                  field and a submit button "Reserve now"
- *       <section>  an active reservation: id, state, quantity, lock end, time
- *                  left on the lock (<time role="timer">), Cancel
+ *       <section>  an active reservation: id, state, quantity, total, lock end,
+ *                  time left on the lock (<time role="timer">), Checkout, Cancel
+ *     <section>    after a purchase: the confirmation (order, quantity, total,
+ *                  time), shown until the next reservation request
  *       <button>   otherwise: disabled, label says why (opens at…, sold out, ended)
  *
  * Elements that can hold focus carry data-focus, so the mount can put focus
@@ -77,15 +80,17 @@ export function units(count) {
 }
 
 /** The shopper's active reservation. */
-function ReservationPanel({ id, reservation, lockText, format, onCancel }) {
+function ReservationPanel({ id, config, reservation, lockText, format, onCheckout, onCancel }) {
     const headingId = `${id}-reservation`;
     const { state } = reservation;
+    const checkingOut = state === RESERVATION_STATE.CHECKING_OUT;
     return createElement("section", { className: "sale-reservation", "aria-labelledby": headingId, "data-reservation-id": reservation.id },
         createElement("h3", { id: headingId }, "Your reservation"),
         createElement("dl", { className: "sale-card__facts" },
             term("Reservation", createElement("code", null, reservation.id.slice(0, 8))),
             term("State", createElement("output", { "data-reservation-state": state }, RESERVATION_STATE_LABELS[state])),
             term("Quantity", units(reservation.quantity)),
+            term("Total", format.price(reservation.quantity * config.salePrice)),
             reservation.expiresAt === null
                 ? null
                 : term("Locked until", createElement("time", { datetime: new Date(reservation.expiresAt).toISOString() }, format.timeWithSeconds(reservation.expiresAt)))
@@ -96,14 +101,41 @@ function ReservationPanel({ id, reservation, lockText, format, onCancel }) {
                 "Lock expires in ",
                 createElement("time", { className: "sale-lock__time", role: "timer", "aria-atomic": "true", "data-lock-countdown": "" }, lockText)
             ),
-        createElement("button", {
-            type: "button",
-            className: "sale-card__secondary",
-            "data-action": "cancel",
-            "data-focus": "cancel",
-            disabled: state !== RESERVATION_STATE.LOCKED,
-            onClick: onCancel
-        }, "Cancel reservation")
+        createElement("p", { className: "sale-reservation__actions" },
+            // Enabled only while LOCKED: disabled the moment checkout starts, so a
+            // second click cannot submit the same reservation again.
+            createElement("button", {
+                type: "button",
+                className: "sale-card__action",
+                "data-action": "checkout",
+                "data-focus": "checkout",
+                disabled: state !== RESERVATION_STATE.LOCKED,
+                onClick: onCheckout
+            }, checkingOut ? "Processing payment…" : "Checkout"),
+            " ",
+            createElement("button", {
+                type: "button",
+                className: "sale-card__secondary",
+                "data-action": "cancel",
+                "data-focus": "cancel",
+                disabled: state !== RESERVATION_STATE.LOCKED,
+                onClick: onCancel
+            }, "Cancel reservation")
+        )
+    );
+}
+
+/** Shown after a purchase until the shopper starts a new reservation. */
+function PurchaseConfirmation({ id, config, purchase, format }) {
+    const headingId = `${id}-purchase`;
+    return createElement("section", { className: "sale-confirmation", "aria-labelledby": headingId, "data-purchase-id": purchase.id },
+        createElement("h3", { id: headingId }, "Purchase confirmed"),
+        createElement("dl", { className: "sale-card__facts" },
+            term("Order", createElement("code", null, purchase.id.slice(0, 8))),
+            term("Quantity", units(purchase.quantity)),
+            term("Total paid", format.price(purchase.quantity * config.salePrice)),
+            term("Purchased at", createElement("time", { datetime: new Date(purchase.purchasedAt).toISOString() }, format.timeWithSeconds(purchase.purchasedAt)))
+        )
     );
 }
 
@@ -129,9 +161,9 @@ function ReserveForm({ id, available, quantity, onSubmit, onQuantityInput }) {
 }
 
 function ActionArea(view) {
-    const { id, config, status, inventory, reservation, lockText, quantity, format, onReserveSubmit, onQuantityInput, onCancel } = view;
+    const { id, config, status, inventory, reservation, lockText, quantity, format, onReserveSubmit, onQuantityInput, onCheckout, onCancel } = view;
     if (reservation && isActiveState(reservation.state)) {
-        return ReservationPanel({ id, reservation, lockText, format, onCancel });
+        return ReservationPanel({ id, config, reservation, lockText, format, onCheckout, onCancel });
     }
     const action = primaryAction(status, inventory.available, config, format);
     if (!action.disabled) {
@@ -152,7 +184,8 @@ function term(label, ...details) {
 
 /**
  * view: { id, config, status, inventory, countdownText, reservation, lockText,
- *         quantity, format, onReserveSubmit, onQuantityInput, onCancel }
+ *         purchase, quantity, format, onReserveSubmit, onQuantityInput,
+ *         onCheckout, onCancel }
  * config must already be validated; inventory is { total, available, reserved, sold };
  * reservation is the shopper's active reservation snapshot or null.
  */
@@ -182,6 +215,7 @@ export function ProductCard(view) {
                 createElement("time", { datetime: new Date(config.endsAt).toISOString() }, format.dateTime(config.endsAt))
             )
         ),
+        view.purchase ? PurchaseConfirmation({ id, config, purchase: view.purchase, format }) : null,
         ActionArea(view)
     );
 }

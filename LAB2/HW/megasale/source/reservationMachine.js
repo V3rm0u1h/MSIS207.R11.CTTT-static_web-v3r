@@ -46,6 +46,9 @@ export const RESERVATION_ERROR_CODES = Object.freeze({
     INVALID_TRANSITION: "invalid-transition",
     EXPIRED: "reservation-expired",
     PROCESSING_FAILED: "processing-failed",
+    ALREADY_PURCHASED: "already-purchased",
+    CHECKOUT_FAILED: "checkout-failed",
+    NOT_ELIGIBLE: "not-eligible",
     DISPOSED: "disposed"
 });
 
