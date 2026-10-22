@@ -4,6 +4,7 @@
  * --audio-surface (#ffffff). Targets: text >= 4.5:1, borders/focus >= 3:1.
  *   --audio-text   15.96:1   --audio-muted  7.69:1   --audio-border 4.83:1
  *   --audio-focus   6.70:1   --audio-error  6.57:1   --audio-ok     7.00:1
+ *   --audio-bar     6.70:1 (visualizer bars, non-text graphics >= 3:1)
  */
 :root {
     --audio-text: #1a2230;
@@ -15,6 +16,7 @@
     --audio-pressed-bg: #dbe6fd;
     --audio-error: #b42318;
     --audio-ok: #17663a;
+    --audio-bar: #1d4ed8;
 }
 
 .audio-tracks {
@@ -99,4 +101,44 @@
 .audio-analyser {
     color: var(--audio-muted);
     font-variant-numeric: tabular-nums;
+}
+
+.audio-visualizer {
+    margin-top: 1rem;
+    padding: 1rem 1.25rem;
+    border: 1px solid var(--audio-border);
+    border-radius: 0.5rem;
+    background: var(--audio-surface);
+}
+
+.audio-visualizer h2 {
+    margin: 0 0 0.75rem;
+    font-size: 1.125rem;
+}
+
+/* The CSS box sets the size; the script matches the backing store to it. */
+.audio-visualizer__canvas {
+    display: block;
+    width: 100%;
+    height: 10rem;
+    border-radius: 0.25rem;
+}
+
+@media (max-width: 30rem) {
+    .audio-visualizer__canvas { height: 7.5rem; }
+}
+
+.audio-visualizer__status {
+    margin: 0.75rem 0 0;
+    color: var(--audio-muted);
+}
+
+.audio-visualizer__status[data-state="playing"] { color: var(--audio-ok); }
+
+.audio-visualizer .audio-analyser {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0;
 }

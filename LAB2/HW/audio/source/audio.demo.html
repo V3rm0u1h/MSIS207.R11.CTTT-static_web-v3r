@@ -18,7 +18,7 @@
 <body>
 <main>
     <h1>Mini-React Audio Engine</h1>
-    <p class="demo-intro">Pick a track to download and decode it with the Web Audio API (T-01). The valid tone plays through an analyser; the other two tracks show how a missing file and a corrupted file are reported.</p>
+    <p class="demo-intro">Pick a track to download and decode it with the Web Audio API (T-01). Tracks load one at a time through a FIFO queue (T-02), and switching tracks cancels stale loads (T-03). Press Play to see the live frequency spectrum drawn on a canvas (T-04); the missing and corrupted tracks show how errors are reported.</p>
     <section id="audio-root" aria-label="Audio player"></section>
     <noscript>JavaScript must be enabled to use the audio player.</noscript>
 </main>

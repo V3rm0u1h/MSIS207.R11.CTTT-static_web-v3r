@@ -22,17 +22,18 @@
 <body>
   <main>
     <h1>Audio Engine Tests</h1>
-    <p>T-01 covers the shared AudioContext, the source → analyser → destination graph, FFT sizes, fetching and decoding (including real WAV and corrupted files), playback, error codes and the player UI. T-02 covers the FIFO queue: submission order, one active job, failures that do not block, cancellation of waiting jobs and status reporting.</p>
+    <p>T-01 covers the shared AudioContext, the source → analyser → destination graph, FFT sizes, fetching and decoding (including real WAV and corrupted files), playback, error codes and the player UI. T-02 covers the FIFO queue: submission order, one active job, failures that do not block, cancellation of waiting jobs and status reporting. T-03 covers request cancellation, stale results and resource cleanup. T-04 covers the canvas visualizer: one animation loop, reused frequency data, no DOM work per frame, resizing and cleanup.</p>
     <p id="test-summary" role="status" aria-live="polite">Running tests…</p>
     <ul id="test-results" aria-label="Test results"></ul>
     <section id="test-sandbox" aria-label="Test sandbox"></section>
     <noscript>JavaScript must be enabled to run these tests.</noscript>
   </main>
   <script type="module">
-    import { runTests } from "../../HW/source/testHarness.js";
+    import { runTests } from "../../source/testHarness.js";
     import "./audioEngine.test.js";
     import "./audioQueue.test.js";
     import "./mountAudioPlayer.test.js";
+    import "./audioVisualizer.test.js";
 
     runTests("Audio engine");
   </script>

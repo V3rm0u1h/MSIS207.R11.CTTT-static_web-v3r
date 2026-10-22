@@ -1,12 +1,13 @@
 /**
- * Mini-React Audio Engine — player UI (T-01, T-02, T-03)
+ * Mini-React Audio Engine — player UI (T-01, T-02, T-03, T-04)
  *
  * Layout inside the mount root (rendered once with renderToDOM):
  *   <section>         track list (one native button per track) and queue actions
  *   <p role="status"> live region for loading, playback and error messages
  *   <p>               queue summary: waiting, loading and outcome counts
  *   <p>               Play / Stop controls
- *   <p>               analyser details and a one-off spectrum reading
+ *   <section>         frequency visualizer: heading, <canvas>, visualizer
+ *                     status, analyser details, FFT size and spectrum reading
  *
  * Nothing is re-rendered: text and button states are updated in place, so
  * focus never moves. Clicks go through the root event delegation system.
@@ -19,13 +20,18 @@
  * touches the status line if its track is still selected, and Play only
  * starts if no other track was chosen while the context resumed
  * (selection generation). Cancellation is never shown as an error.
+ *
+ * Visualizer (T-04): Play starts the canvas loop; Stop, a natural end, a
+ * track switch and dispose stop it. Per-frame drawing never goes through
+ * setStatus or any DOM update; only those events change text.
  */
 
-import { createElement } from "../../HW/source/createElement.js";
-import { renderToDOM } from "../../HW/source/renderToDOM.js";
-import { attachRootEventDelegation } from "../../HW/source/events.js";
+import { createElement } from "../../source/createElement.js";
+import { renderToDOM } from "../../source/renderToDOM.js";
+import { attachRootEventDelegation } from "../../source/events.js";
 import { createAudioEngine, AudioEngineError, isAbortError } from "./audioEngine.js";
 import { createJobQueue, JOB_STATUS } from "./audioQueue.js";
+import { createVisualizer } from "./audioVisualizer.js";
 
 const TRACK_ID_PATTERN = /^[a-z0-9-]+$/;
 
@@ -65,6 +71,17 @@ function describeError(error) {
     console.error(error);
     return "Something went wrong with audio playback.";
 }
+
+// Visualizer caption for each status state; changes only on events, never per frame.
+const VISUALIZER_TEXT = Object.freeze({
+    idle: "Visualizer stopped. Choose a track and press Play.",
+    queued: "Visualizer waiting: the track is loading.",
+    loading: "Visualizer waiting: the track is loading.",
+    ready: "Visualizer stopped. Press Play to see the spectrum.",
+    playing: "Visualizer running: showing the live spectrum.",
+    error: "Visualizer stopped: no audio is available."
+});
+const CANVAS_FALLBACK = "Your browser cannot draw the frequency visualizer. Playback still works.";
 
 function formatSeconds(seconds) {
     return `${seconds.toFixed(1)} s`;
@@ -141,24 +158,56 @@ export function mountAudioPlayer(root, props, options = {}) {
         createElement("button", { type: "button", className: "audio-controls__button", "data-action": "play", disabled: true, onClick: handlePlay }, "Play"),
         createElement("button", { type: "button", className: "audio-controls__button", "data-action": "stop", disabled: true, onClick: handleStop }, "Stop")
     ));
-    const analyserElement = renderToDOM(createElement("p", { className: "audio-analyser" },
-        createElement("span", { "data-analyser-info": "" }, "Analyser starts when the first track loads."),
-        " ",
-        createElement("button", { type: "button", className: "audio-controls__button", "data-action": "sample", disabled: true, onClick: handleSample }, "Read spectrum")
+    const visualizerTitleId = `${id}-visualizer-title`;
+    const visualizerElement = renderToDOM(createElement("section", { className: "audio-visualizer", "aria-labelledby": visualizerTitleId },
+        createElement("h2", { id: visualizerTitleId }, "Frequency spectrum"),
+        // Children of <canvas> are shown only where canvas is unsupported.
+        createElement("canvas", {
+            className: "audio-visualizer__canvas",
+            role: "img",
+            "aria-label": "Live frequency bars for the playing track; low frequencies on the left.",
+            width: 600,
+            height: 160
+        }, CANVAS_FALLBACK),
+        createElement("p", { className: "audio-visualizer__status", "data-visualizer-status": "", "data-state": "idle" }, VISUALIZER_TEXT.idle),
+        createElement("p", { className: "audio-analyser" },
+            createElement("span", { "data-analyser-info": "" }, "Analyser starts when the first track loads."),
+            " ",
+            createElement("button", { type: "button", className: "audio-controls__button", "data-action": "fft", disabled: true, onClick: handleToggleFft }, "Use FFT 256"),
+            " ",
+            createElement("button", { type: "button", className: "audio-controls__button", "data-action": "sample", disabled: true, onClick: handleSample }, "Read spectrum")
+        )
     ));
 
     const playButton = controlsElement.querySelector("[data-action=play]");
     const stopButton = controlsElement.querySelector("[data-action=stop]");
     const cancelButton = trackElement.querySelector("[data-action=cancel]");
-    const sampleButton = analyserElement.querySelector("[data-action=sample]");
-    const analyserInfo = analyserElement.querySelector("[data-analyser-info]");
+    const sampleButton = visualizerElement.querySelector("[data-action=sample]");
+    const fftButton = visualizerElement.querySelector("[data-action=fft]");
+    const analyserInfo = visualizerElement.querySelector("[data-analyser-info]");
+    const canvas = visualizerElement.querySelector("canvas");
+    const visualizerStatus = visualizerElement.querySelector("[data-visualizer-status]");
 
     attachRootEventDelegation(root, ["click"]);
-    root.replaceChildren(trackElement, statusElement, queueElement, controlsElement, analyserElement);
+    root.replaceChildren(trackElement, statusElement, queueElement, controlsElement, visualizerElement);
+
+    // Created after mounting so the resize observer measures the real box.
+    // getFrequencyData returns the engine's reused array; isActive lets the
+    // loop end itself when playback stops by any path.
+    const visualizer = createVisualizer(canvas, {
+        getFrequencyData: () => engine.getFrequencyData(),
+        isActive: () => engine.isPlaying,
+        ...options.visualizer
+    });
+    // The engine may be disposed by its owner directly; the loop must not outlive it.
+    const unregisterVisualizer = engine.onDispose(() => visualizer.dispose());
+    if (!visualizer.canDraw) visualizerStatus.textContent = CANVAS_FALLBACK;
 
     function setStatus(text, state) {
         statusElement.textContent = text;
         statusElement.dataset.state = state;
+        visualizerStatus.textContent = visualizer.canDraw ? VISUALIZER_TEXT[state] : CANVAS_FALLBACK;
+        visualizerStatus.dataset.state = state;
     }
 
     /** Per-track label: decoded buffer, queue position, or last outcome. */
@@ -223,6 +272,7 @@ export function mountAudioPlayer(root, props, options = {}) {
             buffers.set(track.id, job.result);
             analyserInfo.textContent = describeAnalyser();
             sampleButton.disabled = false;
+            fftButton.disabled = false;
             if (selected) setStatus(`“${track.title}” is ready (${formatSeconds(job.result.duration)}). Press Play.`, "ready");
         } else if (job.status === JOB_STATUS.ERROR && !isAbortError(job.error)) {
             loadErrors.set(track.id, job.error);
@@ -247,6 +297,7 @@ export function mountAudioPlayer(root, props, options = {}) {
     function selectTrack(track) {
         if (track.id !== currentTrack?.id) {
             engine.stop();
+            visualizer.stop();
             selectionGeneration += 1;
             // The previous choice's load is now stale: cancel it (no-op if finished).
             if (selectionLoad && selectionLoad.trackId !== track.id) queue.cancel(selectionLoad.jobId);
@@ -289,12 +340,15 @@ export function mountAudioPlayer(root, props, options = {}) {
                 isCurrent,
                 onEnded: () => {
                     if (!mounted) return;
+                    visualizer.stop();
                     setStatus(`“${track.title}” finished.`, "ready");
                     syncControls();
                 }
             });
             // Another track was chosen while the context resumed: leave its status alone.
             if (!started || !isCurrent()) return;
+            // start() is a no-op while a loop runs, so replaying never stacks loops.
+            visualizer.start();
             setStatus(`Playing “${track.title}”.`, "playing");
         } catch (error) {
             if (!isCurrent()) return;
@@ -305,8 +359,17 @@ export function mountAudioPlayer(root, props, options = {}) {
 
     function handleStop() {
         engine.stop();
+        visualizer.stop();
         if (currentTrack) setStatus(`Stopped “${currentTrack.title}”.`, "ready");
         syncControls();
+    }
+
+    /** Switch between the two supported FFT sizes; the loop reads the resized array next frame. */
+    function handleToggleFft() {
+        const next = engine.getAnalyser().fftSize === 512 ? 256 : 512;
+        engine.setFftSize(next);
+        fftButton.textContent = `Use FFT ${next === 512 ? 256 : 512}`;
+        analyserInfo.textContent = describeAnalyser();
     }
 
     function handleSample() {
@@ -327,10 +390,12 @@ export function mountAudioPlayer(root, props, options = {}) {
         queue,
         get currentTrack() { return currentTrack; },
         get buffer() { return currentTrack ? buffers.get(currentTrack.id) ?? null : null; },
+        visualizer,
         /**
          * Release everything this player created: cancel waiting jobs and
-         * abort the running download (queue), drop decoded buffers, empty
-         * the root, then dispose the engine. Safe to call more than once.
+         * abort the running download (queue), stop the animation frame and
+         * resize observer (visualizer), drop decoded buffers, empty the
+         * root, then dispose the engine. Safe to call more than once.
          * Root click delegation stays attached: events.js has no detach and
          * registers each root once, so remounting does not add listeners.
          */
@@ -339,6 +404,8 @@ export function mountAudioPlayer(root, props, options = {}) {
             mounted = false;
             unsubscribe();
             queue.dispose();
+            visualizer.dispose();
+            unregisterVisualizer();
             selectionLoad = null;
             currentTrack = null;
             buffers.clear();

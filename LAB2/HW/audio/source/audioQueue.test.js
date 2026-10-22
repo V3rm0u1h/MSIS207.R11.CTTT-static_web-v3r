@@ -1,6 +1,6 @@
 import { createJobQueue, JOB_STATUS, MAX_ACTIVE_JOBS } from "./audioQueue.js";
 import { createAudioEngine, AudioEngineError, AUDIO_ERROR_CODES } from "./audioEngine.js";
-import { test, assert, assertEqual, assertDeepEqual, assertThrowsType, wait } from "../../HW/source/testHarness.js";
+import { test, assert, assertEqual, assertDeepEqual, assertThrowsType, wait } from "../../source/testHarness.js";
 
 // T-02 — FIFO loading and decoding queue.
 

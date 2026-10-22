@@ -6,7 +6,7 @@ import {
     DEFAULT_FFT_SIZE,
     SUPPORTED_FFT_SIZES
 } from "./audioEngine.js";
-import { test, assert, assertEqual, assertDeepEqual, assertThrowsType, wait } from "../../HW/source/testHarness.js";
+import { test, assert, assertEqual, assertDeepEqual, assertThrowsType, wait } from "../../source/testHarness.js";
 
 // T-01 — Web Audio engine foundation.
 

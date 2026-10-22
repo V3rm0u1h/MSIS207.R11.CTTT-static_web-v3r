@@ -1,18 +1,18 @@
 # REPORT LAB2 — Mini-React Audio Engine
 
-Audio engine and visualizer built on the Mini-React core in `../HW/source/`
+Audio engine and visualizer built on the Mini-React core in `../source/`
 (`createElement`, `renderToDOM`, `events`, `testHarness`). The core is
 imported, not copied. Code is in `source/`.
 
-Serve from the `LAB2/` folder so the `../../HW/source/` imports resolve:
+Serve from the `LAB2/` folder so the `../../source/` imports resolve:
 
 ```
 cd LAB2
 python -m http.server 8765
 ```
 
-- Demo: http://localhost:8765/AUDIO/source/audio.demo.html
-- Tests: http://localhost:8765/AUDIO/source/audio.test.html
+- Demo: http://localhost:8765/HW/audio/source/audio.demo.html
+- Tests: http://localhost:8765/HW/audio/source/audio.test.html
 
 ## T-01 — Web Audio engine foundation
 
@@ -170,3 +170,121 @@ Mutation checks (each made tests fail, then the code was restored):
 | Queue accepts a cancelled job's late result | 3 |
 | UI stops passing `isCurrent` to `play()` | 1 |
 | UI stops cancelling the previous selection's load | 1 |
+
+## T-04 — Real-time canvas frequency visualizer
+
+Commit: `feat(audio): implement performant real-time frequency visualizer`
+
+| File | Change |
+| --- | --- |
+| `source/audioVisualizer.js` | DOM-free drawing loop: `createVisualizer(canvas, { getFrequencyData, isActive })` with `start` / `stop` / `dispose`, one `requestAnimationFrame` loop, bars drawn on the 2D context, `ResizeObserver` sizing |
+| `source/mountAudioPlayer.js` | New "Frequency spectrum" section (heading, `<canvas role="img">` with fallback text, visualizer status, analyser info, FFT 256/512 toggle, Read spectrum); Play starts the loop, Stop / natural end / track switch / dispose stop it |
+| `source/audio.css` | Visualizer styles; `--audio-bar` (6.70:1 on white) |
+| `source/*.js`, `audio.test.html` | Imports fixed from `../../HW/source/` to `../../source/`: the T-03 folder move (`LAB2/AUDIO` → `LAB2/HW/audio`) had left them pointing at a missing path, so the demo and tests did not load |
+
+![Visualizer while the 440 Hz test tone plays](images/t04-visualizer.png)
+
+Key decisions:
+
+- **Canvas, not SVG.** 256 bins (FFT 512) or 128 bins (FFT 256) as SVG
+  elements would mean hundreds of attribute writes per frame. On canvas a
+  frame is one `fillRect` per bar.
+- **No per-frame state or DOM.** The loop calls `engine.getFrequencyData()`
+  (the engine's single reused `Uint8Array`) and draws. It never calls
+  `setStatus`, builds a VNode or touches an element. Text changes only on
+  events: play, stop, end, track switch, load and error. A test watches the
+  player root with a `MutationObserver` for 60 frames and records zero
+  mutations.
+- **One loop.** `start()` returns `false` while a frame is pending, so
+  pressing Play twice or switching tracks never adds a loop. The frame
+  callback is one function created once, so scheduling allocates no
+  closures.
+- **Stopping.** `stop()` cancels the stored frame id and draws a flat
+  baseline. The loop also ends itself when `isActive()`
+  (`engine.isPlaying`) turns false, so playback ending by any path (natural
+  end, `engine.stop()`, a replaced source) stops drawing after one baseline
+  frame.
+- **Cleanup.** `dispose()` cancels the frame, disconnects the
+  `ResizeObserver` (or removes the window `resize` listener when
+  `ResizeObserver` is missing) and refuses later `start()` calls. The
+  player registers it with `engine.onDispose()` (T-03), so disposing either
+  the player or the engine on its own stops the loop. The player
+  unregisters that hook when it is disposed.
+- **Sizing.** The canvas is `width: 100%` and 10rem tall (7.5rem below
+  30rem wide). The backing store is the CSS size × `devicePixelRatio` and
+  changes only in the `ResizeObserver` callback, so frames never read
+  layout. Colors are read from CSS custom properties on resize, not per
+  frame.
+- **Bars.** One bar per bin when there is room, otherwise neighbouring bins
+  share a bar showing their peak value. Bars stay at least 3 CSS px wide
+  with integer edges, so nothing is anti-aliased into a blur.
+- **Missing analyser.** `getFrequencyData` returning `null` or an empty
+  array draws the baseline. If it throws (e.g. the engine is gone), the
+  loop logs the error once and stops instead of throwing every frame. If
+  `getContext("2d")` returns `null`, the status line shows the fallback
+  message and playback still works.
+- **FFT size.** The "Use FFT 256 / 512" button calls `engine.setFftSize()`.
+  The next frame reads the resized array.
+- Frame rate follows `requestAnimationFrame`: about 60 FPS on a 60 Hz
+  display. It is lower in background tabs and on slow hardware.
+
+Tests: `source/audio.test.html` — 97/97 passed (headless Edge 155 with
+`--autoplay-policy=no-user-gesture-required`; the two real-playback tests
+need autoplay allowed, so in a normal browser click the page and reload
+if they report a suspended context). New tests use a manual frame
+scheduler and a fake `ResizeObserver` to count loops exactly. They cover
+argument checks, a single loop under repeated `start()`, typed-array
+reuse, pixel checks of bars and baseline, peak grouping, zero DOM mutations
+per frame, `stop()`, the self-ending loop, missing or throwing data,
+device-pixel-ratio sizing, a real `ResizeObserver` following its container,
+`dispose()`, removal of the window `resize` fallback, and a canvas with no
+2D context. Player tests cover the semantic section, one loop per Play,
+replays and track switches, Stop / natural end, the FFT toggle, and
+disposal through the player or the engine. Two integration tests use the
+real engine, WAV files and `requestAnimationFrame`: live bars appear and
+stop after `engine.stop()`; three track switches with double Play keep one
+frame request per frame.
+
+Demo check (headless Edge, 1000 px and about 500 px wide): bars move while
+the tone plays, the canvas follows the container (726 px and 407 px wide),
+there is no horizontal scroll, Stop shows "Visualizer stopped", and the
+console has no errors.
+
+Mutation checks (each made tests fail, then the code was restored):
+
+| Mutation | Failing tests |
+| --- | --- |
+| `start()` no longer ignores a call while a frame is pending | 3 |
+| Track switch no longer stops the visualizer | 1 |
+
+## Final integration (T-01 → T-04)
+
+The suite runs the full workflow from §5.1:
+
+1. Engine created lazily, one shared context (T-01).
+2. "Load all" queues several tracks; downloads and decodes run one at a
+   time in submission order (T-02, real WAV integration test).
+3. A decoded track is selected and Play (a click) resumes the context and
+   starts a source → analyser → destination graph.
+4. The visualizer draws the analyser's data with `requestAnimationFrame`
+   (T-04 integration tests).
+5. Switching tracks while loading or playing cancels the stale load
+   (`AbortController`) and drops late results; a stale Play never starts
+   (T-03).
+6. Stop releases the source node and ends the animation loop.
+7. Dispose aborts pending loads, runs the visualizer's dispose hook
+   (cancels the frame and disconnects the resize observer), stops sources
+   and closes the owned context.
+
+Final checklist:
+
+| Item | Status |
+| --- | --- |
+| Four commits in order (T-01 → T-04) | Done. T-02 and T-03 were each committed twice in history (`ed2fe0d`/`1cbc557`, `af3953d`/`b30e539` folder move) |
+| Web Audio API integration, FFT 256 or 512 | Done |
+| FIFO queue for simultaneous requests | Done |
+| AbortController cancels network requests; stale results ignored | Done |
+| Source nodes cleaned up explicitly | Done |
+| Visualizer uses `requestAnimationFrame`, no per-frame app render | Done |
+| Animation loops and listeners cleaned up | Done |
+| Existing Mini-React core untouched | Done: `LAB2/HW/source/` is unchanged; Data-Grid suite 101/101 |
