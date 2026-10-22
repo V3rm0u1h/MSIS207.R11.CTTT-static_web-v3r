@@ -242,8 +242,8 @@ device-pixel-ratio sizing, a real `ResizeObserver` following its container,
 replays and track switches, Stop / natural end, the FFT toggle, and
 disposal through the player or the engine. Two integration tests use the
 real engine, WAV files and `requestAnimationFrame`: live bars appear and
-stop after `engine.stop()`; three track switches with double Play keep one
-frame request per frame.
+stop after `engine.stop()`; three track switches with double Play never
+draw more visualizer frames than the browser's own animation frames.
 
 Demo check (headless Edge, 1000 px and about 500 px wide): bars move while
 the tone plays, the canvas follows the container (726 px and 407 px wide),
@@ -254,7 +254,7 @@ Mutation checks (each made tests fail, then the code was restored):
 
 | Mutation | Failing tests |
 | --- | --- |
-| `start()` no longer ignores a call while a frame is pending | 3 |
+| `start()` no longer ignores a call while a frame is pending | 4 |
 | Track switch no longer stops the visualizer | 1 |
 
 ## Final integration (T-01 → T-04)

@@ -2,8 +2,10 @@
  * Mini-React Audio Engine — T-02 FIFO loading queue, T-03 cancellation
  *
  * DOM-free job scheduler. Jobs start in the order they are accepted, one at
- * a time (MAX_ACTIVE_JOBS = 1), so downloads and decodes never run in
- * parallel. A job's run() owns its whole download -> decode lifecycle; for
+ * a time (MAX_ACTIVE_JOBS = 1), so no two jobs' downloads and decodes run in
+ * parallel, with one exception: a cancelled job's decode may still finish
+ * in the background (see Cancellation). A job's run() owns its whole
+ * download -> decode lifecycle; for
  * audio that is engine.load(url) from T-01.
  *
  * Job lifecycle:

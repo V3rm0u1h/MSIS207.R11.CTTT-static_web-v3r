@@ -279,16 +279,33 @@ test("a canvas without a 2D context runs without drawing and reports canDraw fal
 
 // --- Integration: real engine, real AudioContext, real requestAnimationFrame ---
 
+/**
+ * Count the browser's own animation frames for ms milliseconds. One loop
+ * draws at most once per browser frame, so two stacked loops show up as
+ * about twice as many visualizer frames as browser frames.
+ */
+async function countBrowserFrames(ms) {
+    let ticks = 0;
+    let counting = true;
+    const tick = () => {
+        if (!counting) return;
+        ticks += 1;
+        requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+    await wait(ms);
+    counting = false;
+    return ticks;
+}
+
 test("real engine: playing the WAV draws live bars, stopping ends the loop", async () => {
     const engine = createAudioEngine();
     const state = await engine.resume();
     assert(state === "running", `AudioContext is "${state}": this test needs autoplay allowed (headless flag --autoplay-policy=no-user-gesture-required, or click the page and reload)`);
     const canvas = canvasInSandbox();
-    let requested = 0;
     const visualizer = createVisualizer(canvas, {
         getFrequencyData: () => engine.getFrequencyData(),
         isActive: () => engine.isPlaying,
-        requestFrame: (callback) => { requested += 1; return requestAnimationFrame(callback); },
         devicePixelRatio: 1
     });
     engine.onDispose(() => visualizer.dispose());
@@ -297,9 +314,12 @@ test("real engine: playing the WAV draws live bars, stopping ends the loop", asy
         await engine.play(buffer);
         visualizer.start();
         visualizer.start();
-        await wait(400);
-        assert(visualizer.frameCount > 5, `Frames ran (${visualizer.frameCount})`);
-        assert(requested <= visualizer.frameCount + 1, "One loop: at most one request per frame");
+        await wait(100);
+        const framesBefore = visualizer.frameCount;
+        const browserFrames = await countBrowserFrames(300);
+        const framesDuring = visualizer.frameCount - framesBefore;
+        assert(framesDuring > 5, `Frames ran (${framesDuring})`);
+        assert(framesDuring <= browserFrames + 1, `One loop: ${framesDuring} visualizer frames in ${browserFrames} browser frames`);
         assert(engine.getFrequencyData().some((value) => value > 0), "Analyser hears the tone");
         const { data } = canvas.getContext("2d").getImageData(0, 0, canvas.width, canvas.height - 2);
         let barPixels = 0;
@@ -322,7 +342,6 @@ test("real engine: playing the WAV draws live bars, stopping ends the loop", asy
 test("real player: every track switch and replay keeps at most one loop", async () => {
     const root = document.createElement("section");
     sandbox().append(root);
-    let requested = 0;
     let cancelled = 0;
     const player = mountAudioPlayer(root, {
         id: "viz-player",
@@ -332,7 +351,6 @@ test("real player: every track switch and replay keeps at most one loop", async 
         ]
     }, {
         visualizer: {
-            requestFrame: (callback) => { requested += 1; return requestAnimationFrame(callback); },
             cancelFrame: (id) => { cancelled += 1; cancelAnimationFrame(id); }
         }
     });
@@ -349,11 +367,10 @@ test("real player: every track switch and replay keeps at most one loop", async 
             assert(player.visualizer.isRunning, `Running for ${id}`);
         }
         const framesBefore = player.visualizer.frameCount;
-        const requestedBefore = requested;
-        await wait(300);
+        const browserFrames = await countBrowserFrames(300);
         const framesDuring = player.visualizer.frameCount - framesBefore;
         assert(framesDuring > 0, "Frames advance");
-        assert(requested - requestedBefore <= framesDuring + 1, "A single loop: one frame request per frame");
+        assert(framesDuring <= browserFrames + 1, `A single loop: ${framesDuring} visualizer frames in ${browserFrames} browser frames`);
         click("[data-action=stop]");
         assert(!player.visualizer.isRunning, "Stopped with playback");
         assertEqual(root.querySelector("[data-visualizer-status]").dataset.state, "ready", "Visualizer status updated");
