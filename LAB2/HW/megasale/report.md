@@ -571,3 +571,85 @@ the same `visibilitychange` listener it added. Every store change in these
 tests is checked against the inventory invariant.
 
 ![Disabled Reserve with its reason](images/t06-reason.png)
+
+## T-07 — Automated tests and AI failure mode audit
+
+Commit: `test(sale): add invariant tests and AI failure audit`
+
+| File | Change |
+| --- | --- |
+| `source/invariants.test.js` | Random operation sequences (seeded, 20 × 60 steps) checking the books after every step; exact stock after each operation type; the PRD 7 race scenarios |
+| `../../../AI_FAILURE_AUDIT.md` | The audit, at the repository root: six evidence-backed failure modes, plus the PRD 7 candidates that did not occur |
+
+**Random-sequence invariant test.** A seeded PRNG (mulberry32) drives
+four shoppers through 60 random steps per seed, 20 seeds in total: reserve,
+cancel, checkout, checkout with a payment left pending across later steps,
+settling a pending payment (70% success, 30% declined), `expireIfDue`,
+firing timers, sweeping, and jumping the clock up to 1.5 lock durations.
+After every step it checks that:
+
+- `total = available + reserved + sold` with every bucket non-negative
+- `reserved` equals the units of LOCKED + CHECKING_OUT reservations
+- `sold` equals the units of PURCHASED reservations
+- no shopper has more than one active reservation
+- only `ReservationError`s were thrown
+
+It also asserts that the sequences actually hit CONFIRM, CANCEL, EXPIRE and
+CHECKOUT_SUCCEED, so the test cannot pass vacuously. A failure names its
+seed and step (e.g. `seed 6, step 8`), so it can be replayed. Payments that
+stay pending matter: with instant payments only, the test could not catch
+a leak during checkout (see the mutations below).
+
+Coverage of PRD 7 (all in `source/megaSale.test.html`, 124 tests):
+
+| PRD 7 requirement | Tests (file) |
+| --- | --- |
+| FR-01 remaining time from `Date.now()` | "every update reads the wall clock; the interval is never a decrement counter" (`countdown.test.js`) |
+| FR-01 zero without negatives | "past the last target it never goes negative…", "formatDuration … no negatives" (`countdown.test.js`) |
+| FR-01 no drift after delayed callbacks | "a delayed callback (busy thread, background tab, sleep)…" (`countdown.test.js`), "a callback delayed past start and end…" (`mountMegaSale.test.js`) |
+| FR-01 status change at the target | "reaching the start makes the sale live…", "reaching the end shows 00:00:00.000…" (`mountMegaSale.test.js`) |
+| FR-01 disposal stops updates | "start() twice keeps one interval; stop() and dispose() clear it" (`countdown.test.js`), "dispose() clears the countdown interval" (`mountMegaSale.test.js`) |
+| FR-02 invariant after every operation | random sequences; "every operation type leaves the books balanced…" (`invariants.test.js`); listeners asserting the invariant on every change (`reservation.test.js`, `locks.test.js`, `checkout.test.js`, `integration.test.js`) |
+| FR-03 invalid transitions rejected | "every other (state, event) pair is rejected…" — all 47 (`reservation.test.js`) |
+| FR-03 expired cannot be purchased | "checkout that outlives the lock ends EXPIRED, never PURCHASED" (`reservation.test.js`), "a lock that expires during the payment…" (`checkout.test.js`) |
+| FR-03 purchased cannot be finalized again | "eligibility: … already-purchased …" (`checkout.test.js`), "a purchased reservation cannot be finalized again through the low-level calls either" (`invariants.test.js`) |
+| FR-03 duplicate expiry releases once | "expireIfDue is idempotent…" (`locks.test.js`) |
+| FR-03 duplicate checkout sells once | "repeated submissions while checking out…" (`checkout.test.js`), "race: repeated checkout submissions during and after a payment sell once" (`invariants.test.js`) |
+| FR-04 two reservations for the final unit | "race: two shoppers compete for the final unit; exactly one gets it" (`invariants.test.js`), "competing reservations for the last units…" (`locks.test.js`) |
+| FR-04 checkout and expiry close together | "race: the expiry timer fires during a payment…" (`invariants.test.js`), "checkout 1 ms before the expiry succeeds; at the expiry it fails…" (`integration.test.js`) |
+| FR-04 cancellation and expiry close together | "race: expiry and cancel in the same moment release the units once" (`invariants.test.js`), "cancel just before the expiry releases once…" (`integration.test.js`) |
+| FR-04 repeated user submissions | "rapid reservation clicks create one reservation" (`integration.test.js`), "rapid checkout clicks pay and sell once" (`mountMegaSale.test.js`) |
+| FR-04 stale expiry after replacement | "race: a stale expiry callback after the reservation was replaced…" (`invariants.test.js`), "a stale expiry callback cannot touch a cancelled reservation or the newer one…" (`locks.test.js`) |
+| FR-05 / FR-06 / FR-07 audit | `AI_FAILURE_AUDIT.md` at the repository root |
+
+Tests: 124/124 passed (headless Edge 155). The Data-Grid (101/101) and
+audio (97/97) suites still pass.
+
+Mutation checks (each made tests fail, then the code was restored):
+
+| Mutation | Failing tests | Random-sequence test fails? |
+| --- | --- | --- |
+| Expiry during checkout does not release the units | 6 | yes (`seed 6, step 8`) |
+| Purchase commits one unit regardless of quantity | 11 | yes (`seed 1, step 40`) |
+| Duplicate check ignores CHECKING_OUT reservations | 5 | no: the books still balance; caught by state, UI and sequence tests |
+
+Two test defects found while writing these tests are in the audit (§4 and
+§5). The first version of the random test awaited a checkout already in
+progress; deduplication correctly returned the same pending promise, and
+the run hung. With only instant payments, the first mutation above was not
+caught by the random test at all.
+
+**AI failure audit.** `AI_FAILURE_AUDIT.md` documents six failure modes
+the AI assistant actually produced here, each with the flawed code or
+draft, why it is wrong, its impact, the correction and the verification:
+
+1. expiry without checking the lock is due (`15c0006`)
+2. lock expiry trusting timers, with no resume check (found by T-06 tests)
+3. DOM-mutation assertions that could never fail (`ded4b61`, fixed in `a739d94`)
+4. tests that hang instead of failing
+5. tests that pass for the wrong reason
+6. misleading end-of-sale and disabled-control states
+
+PRD 7's candidate failures A (drift) and C (checkout without an expiry
+check) did not occur. They are listed as "not found", with the mutation
+checks that show the tests would catch them.
