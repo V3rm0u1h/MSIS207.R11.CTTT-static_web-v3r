@@ -1,18 +1,4 @@
-/* Accessible Data-Grid — theme tokens and table presentation (PRD 1)
- *
- * Contrast ratios below use the WCAG 2.x relative-luminance formula.
- * Targets: text >= 4.5:1 (1.4.3), borders and focus ring >= 3:1 (1.4.11).
- *
- * | Token           | on surface | on header-bg | on zebra-bg |
- * | --------------- | ---------- | ------------ | ----------- |
- * | --grid-text     | 15.96:1    | 13.57:1      | 14.75:1     |
- * | --grid-muted    |  7.69:1    |  6.53:1      |  7.10:1     |
- * | --grid-border   |  4.83:1    |  4.11:1      |  4.47:1     |
- * | --grid-focus    |  6.70:1    |  5.70:1      |  6.19:1     |
- *
- * Selected rows (PRD 4) use --grid-selected-bg:
- *   text 12.73:1, muted 6.13:1, border 3.86:1, focus 5.35:1.
- */
+
 :root {
     --grid-text: #1a2230;
     --grid-muted: #475467;

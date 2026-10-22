@@ -1,0 +1,297 @@
+/* Accessible Data-Grid — theme tokens and table presentation (PRD 1)
+ *
+ * Contrast ratios below use the WCAG 2.x relative-luminance formula.
+ * Targets: text >= 4.5:1 (1.4.3), borders and focus ring >= 3:1 (1.4.11).
+ *
+ * | Token           | on surface | on header-bg | on zebra-bg |
+ * | --------------- | ---------- | ------------ | ----------- |
+ * | --grid-text     | 15.96:1    | 13.57:1      | 14.75:1     |
+ * | --grid-muted    |  7.69:1    |  6.53:1      |  7.10:1     |
+ * | --grid-border   |  4.83:1    |  4.11:1      |  4.47:1     |
+ * | --grid-focus    |  6.70:1    |  5.70:1      |  6.19:1     |
+ *
+ * Selected rows (PRD 4) use --grid-selected-bg:
+ *   text 12.73:1, muted 6.13:1, border 3.86:1, focus 5.35:1.
+ */
+:root {
+    --grid-text: #1a2230;
+    --grid-muted: #475467;
+    --grid-surface: #ffffff;
+    --grid-header-bg: #e8edf4;
+    --grid-zebra-bg: #f4f6f9;
+    --grid-border: #6b7280;
+    --grid-focus: #1d4ed8;
+    --grid-selected-bg: #dbe6fd;
+}
+
+.data-grid {
+    box-sizing: border-box;
+    max-width: 100%;
+    overflow-x: auto;
+    border: 1px solid var(--grid-border);
+    border-radius: 0.5rem;
+    background: var(--grid-surface);
+    color: var(--grid-text);
+}
+
+.data-grid:focus-visible {
+    outline: 2px solid var(--grid-focus);
+    outline-offset: 2px;
+}
+
+.data-grid__table {
+    width: 100%;
+    border-collapse: collapse;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.4;
+}
+
+.data-grid__caption {
+    caption-side: top;
+    padding: 0.75rem 1rem;
+    font-size: 1.125rem;
+    font-weight: 700;
+    text-align: start;
+}
+
+.data-grid__cell,
+.data-grid__empty {
+    padding: 0.625rem 1rem;
+    border-top: 1px solid var(--grid-border);
+    text-align: start;
+    vertical-align: top;
+}
+
+.data-grid__cell {
+    white-space: nowrap;
+}
+
+.data-grid thead .data-grid__cell {
+    background: var(--grid-header-bg);
+    font-weight: 700;
+}
+
+.data-grid tbody tr:nth-child(even) {
+    background: var(--grid-zebra-bg);
+}
+
+.data-grid tbody th.data-grid__cell {
+    font-weight: 600;
+}
+
+.data-grid__cell--number {
+    text-align: end;
+}
+
+.data-grid__empty {
+    color: var(--grid-muted);
+    font-style: italic;
+    text-align: center;
+}
+
+/* --- PRD 2: sortable headers --------------------------------------------- */
+
+.data-grid__sort {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    min-height: 1.5rem; /* WCAG 2.5.8: at least 24 x 24 px target */
+    margin: -0.25rem -0.375rem;
+    padding: 0.25rem 0.375rem;
+    border: 0;
+    border-radius: 0.25rem;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: inherit;
+    cursor: pointer;
+}
+
+.data-grid__sort:hover {
+    text-decoration: underline;
+    text-underline-offset: 0.2em;
+}
+
+.data-grid__sort:focus-visible {
+    outline: 2px solid var(--grid-focus);
+    outline-offset: 2px;
+}
+
+/* Direction icon: CSS-generated with empty alt text ("/ ''") so it never
+ * changes the button's accessible name. aria-sort carries the meaning. */
+.data-grid__sort::after {
+    content: "\2195" / "";
+    color: var(--grid-muted);
+    font-size: 0.875em;
+}
+
+[aria-sort="ascending"] > .data-grid__sort::after {
+    content: "\25B2" / "";
+    color: inherit;
+}
+
+[aria-sort="descending"] > .data-grid__sort::after {
+    content: "\25BC" / "";
+    color: inherit;
+}
+
+/* --- PRD 2: filter field and status --------------------------------------- */
+
+.data-grid-filter {
+    display: grid;
+    gap: 0.375rem;
+    max-width: 24rem;
+    margin: 0 0 0.75rem;
+}
+
+.data-grid-filter__label {
+    font-weight: 700;
+}
+
+.data-grid-filter__input {
+    box-sizing: border-box;
+    min-height: 2.75rem;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--grid-border);
+    border-radius: 0.375rem;
+    background: var(--grid-surface);
+    color: var(--grid-text);
+    font: inherit;
+}
+
+.data-grid-filter__input:focus-visible {
+    outline: 2px solid var(--grid-focus);
+    outline-offset: 2px;
+}
+
+.data-grid-filter__hint,
+.data-grid__status {
+    margin: 0;
+    color: var(--grid-muted);
+    font-size: 0.9375rem;
+}
+
+.data-grid__status {
+    margin-bottom: 0.75rem;
+}
+
+/* --- PRD 3: rows per page and pager --------------------------------------- */
+
+.data-grid-page-size {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    margin: 0.75rem 0 0;
+}
+
+.data-grid-page-size__label {
+    font-weight: 700;
+}
+
+.data-grid-page-size__select,
+.data-grid-pager__button {
+    box-sizing: border-box;
+    min-width: 2.75rem;
+    min-height: 2.75rem; /* well above the 24 x 24 px minimum of WCAG 2.5.8 */
+    padding: 0.375rem 0.75rem;
+    border: 1px solid var(--grid-border);
+    border-radius: 0.375rem;
+    background: var(--grid-surface);
+    color: var(--grid-text);
+    font: inherit;
+}
+
+.data-grid-page-size__select:focus-visible,
+.data-grid-pager__button:focus-visible {
+    outline: 2px solid var(--grid-focus);
+    outline-offset: 2px;
+}
+
+.data-grid-pager__list {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.375rem;
+    margin: 0.75rem 0 0;
+    padding: 0;
+    list-style: none;
+}
+
+.data-grid-pager__button {
+    cursor: pointer;
+}
+
+.data-grid-pager__button:hover:not(:disabled) {
+    background: var(--grid-header-bg);
+}
+
+/* Current page: inverted colours plus bold, so it never relies on colour alone.
+ * --grid-surface on --grid-focus is 6.70:1. */
+.data-grid-pager__button[aria-current="page"] {
+    border-color: var(--grid-focus);
+    background: var(--grid-focus);
+    color: var(--grid-surface);
+    font-weight: 700;
+}
+
+/* Disabled controls are exempt from contrast rules, but stay readable anyway
+ * (--grid-muted on --grid-zebra-bg is 7.10:1). */
+.data-grid-pager__button:disabled {
+    border-style: dashed;
+    background: var(--grid-zebra-bg);
+    color: var(--grid-muted);
+    cursor: not-allowed;
+}
+
+.data-grid-pager__gap {
+    padding-inline: 0.25rem;
+    color: var(--grid-muted);
+}
+
+/* --- PRD 4: grid focus and selection -------------------------------------- */
+
+/* Focused cells: an inset ring so the scroll region never clips it (2.4.11). */
+.data-grid__table--interactive [data-row]:focus-visible {
+    outline: 2px solid var(--grid-focus);
+    outline-offset: -3px;
+}
+
+.data-grid__table--interactive [data-row]:focus:not(:focus-visible) {
+    outline: none;
+}
+
+.data-grid__cell--select {
+    width: 1%;
+    text-align: center;
+}
+
+.data-grid__select-all {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    cursor: pointer;
+}
+
+.data-grid__checkbox {
+    width: 1.5rem;  /* 24 x 24 px target (WCAG 2.5.8) */
+    height: 1.5rem;
+    margin: 0;
+    accent-color: var(--grid-focus);
+    cursor: pointer;
+}
+
+.data-grid__checkbox:focus-visible {
+    outline: 2px solid var(--grid-focus);
+    outline-offset: 2px;
+}
+
+/* Selection never relies on colour alone: the checkbox is ticked and the row
+ * gets a thick left bar as well as the tinted background. */
+.data-grid tbody tr.data-grid__row--selected {
+    background: var(--grid-selected-bg);
+}
+
+.data-grid__row--selected > :first-child {
+    box-shadow: inset 0.25rem 0 0 var(--grid-focus);
+}
