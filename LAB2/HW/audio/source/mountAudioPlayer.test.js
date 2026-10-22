@@ -366,11 +366,13 @@ test("Play starts one animation loop; frames read data without touching the DOM"
     assert(handle.visualizer.isRunning, "Loop running");
     assertEqual(frames.pending, 1, "One frame pending");
     assert(visualizerStatus(root).textContent.includes("running"), "Status says running");
-    const observer = new MutationObserver(() => {});
+    // The callback runs as a microtask and receives the records first, so keep them.
+    const seen = [];
+    const observer = new MutationObserver((list) => seen.push(...list));
     observer.observe(root, { subtree: true, childList: true, attributes: true, characterData: true });
     frames.step(60);
     await wait(0);
-    const records = observer.takeRecords();
+    const records = [...seen, ...observer.takeRecords()];
     observer.disconnect();
     assertEqual(records.length, 0, "No DOM mutation in 60 frames");
     assertEqual(engine.calls.frequencyReads, 60, "Data read every frame");

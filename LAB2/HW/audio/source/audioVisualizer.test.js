@@ -146,12 +146,14 @@ test("more bins than pixels share whole-pixel bars that keep each group's peak",
 
 test("frames draw on the canvas without any DOM mutation", async () => {
     const { canvas, frames, visualizer } = setup();
-    const observer = new MutationObserver(() => {});
+    // The callback runs as a microtask and receives the records first, so keep them.
+    const seen = [];
+    const observer = new MutationObserver((list) => seen.push(...list));
     observer.observe(sandbox(), { subtree: true, childList: true, attributes: true, characterData: true });
     visualizer.start();
     frames.step(120);
     await wait(0);
-    const records = observer.takeRecords();
+    const records = [...seen, ...observer.takeRecords()];
     observer.disconnect();
     assertEqual(records.length, 0, "No DOM changes during 120 frames");
     assertEqual(sandbox().querySelectorAll("*").length, 1, "Still only the canvas");
