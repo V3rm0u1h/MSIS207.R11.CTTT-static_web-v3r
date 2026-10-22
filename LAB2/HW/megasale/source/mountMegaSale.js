@@ -1,6 +1,6 @@
 /**
  * Vietnam Mega-Sale Simulator — T-01 mount and wiring, T-02 countdown,
- * T-03 reservations, T-04 lock countdown, T-05 checkout
+ * T-03 reservations, T-04 lock countdown, T-05 checkout, T-06 integration
  *
  * Layout inside the mount root:
  *   <article>          product card, re-rendered when the derived view changes
@@ -40,6 +40,17 @@
  * while CHECKING_OUT) and the live region reports in progress, purchase,
  * expired, failed and cancelled outcomes. options.processCheckout is passed
  * to the store (tests, and the demo's "failed payment" switch).
+ *
+ * Integration (T-06):
+ * - Everything shown comes from the store: stock, the active reservation and
+ *   the purchase confirmation (kept as a reservation id and read back from
+ *   the store), so the UI cannot hold a copy that disagrees with it.
+ * - When the tab becomes visible again, due locks are expired at once
+ *   (store.sweepExpired) instead of waiting for throttled timers. The
+ *   visibilitychange listener is removed on dispose.
+ * - When the sale ends while the shopper holds a lock, the announcement says
+ *   the reservation is still held and until when; checkout stays possible
+ *   until the lock's own expiry.
  */
 
 import { renderToDOM } from "../../source/renderToDOM.js";
@@ -106,8 +117,8 @@ export function mountMegaSale(root, props, options = {}) {
     const { config } = result;
     const format = createFormatters(config.timeZone);
     // The quantity field's text, kept as typed so a re-render does not reset it.
-    // lastPurchase: the shopper's latest PURCHASED snapshot, shown as a confirmation.
-    const state = { quantity: "1", lastPurchase: null };
+    // lastPurchaseId: the shopper's latest purchase, shown as a confirmation (read from the store).
+    const state = { quantity: "1", lastPurchaseId: null };
     let mounted = true;
 
     function readNow() {
@@ -206,7 +217,7 @@ export function mountMegaSale(root, props, options = {}) {
             countdownText: formatDuration(target === null ? 0 : remainingMs(target, at)),
             reservation,
             lockText: formatDuration(lockAt === null ? 0 : remainingMs(lockAt, at)),
-            purchase: state.lastPurchase,
+            purchase: state.lastPurchaseId === null ? null : store.get(state.lastPurchaseId),
             quantity: state.quantity,
             format,
             onReserveSubmit: handleReserveSubmit,
@@ -285,8 +296,8 @@ export function mountMegaSale(root, props, options = {}) {
     const unsubscribe = store.subscribe((change) => {
         if (change.reservation.shopperId === SHOPPER_ID) {
             // The confirmation shows the latest purchase until a new reservation starts.
-            if (change.type === RESERVATION_EVENT.CHECKOUT_SUCCEED) state.lastPurchase = change.reservation;
-            if (change.type === RESERVATION_EVENT.REQUEST) state.lastPurchase = null;
+            if (change.type === RESERVATION_EVENT.CHECKOUT_SUCCEED) state.lastPurchaseId = change.reservation.id;
+            if (change.type === RESERVATION_EVENT.REQUEST) state.lastPurchaseId = null;
         }
         refresh();
         if (change.type === RESERVATION_EVENT.EXPIRE && change.reservation.shopperId === SHOPPER_ID) {
@@ -309,12 +320,25 @@ export function mountMegaSale(root, props, options = {}) {
             const previous = renderedStatus;
             refresh();
             if (renderedStatus === previous) return;
-            setMessage(renderedStatus === SALE_STATUS.LIVE
-                ? `The sale is live now. ${config.productName} is ${format.price(config.salePrice)}.`
+            if (renderedStatus === SALE_STATUS.LIVE) {
+                setMessage(`The sale is live now. ${config.productName} is ${format.price(config.salePrice)}.`);
+                return;
+            }
+            const held = store.activeFor(SHOPPER_ID);
+            setMessage(held && held.expiresAt !== null
+                ? `The sale has ended. Your reservation of ${units(held.quantity)} is still held until ` +
+                    `${format.timeWithSeconds(held.expiresAt)}; you can still check out.`
                 : "The sale has ended.");
         }
     });
     countdown.start();
+
+    // Back from a hidden tab: timers may have been throttled, so check the locks now.
+    function handleVisibilityChange() {
+        if (!mounted || document.visibilityState === "hidden") return;
+        store.sweepExpired();
+    }
+    document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return Object.freeze({
         ok: true,
@@ -327,6 +351,7 @@ export function mountMegaSale(root, props, options = {}) {
         dispose() {
             if (!mounted) return;
             mounted = false;
+            document.removeEventListener("visibilitychange", handleVisibilityChange);
             countdown.dispose();
             lockCountdown.dispose();
             unsubscribe();

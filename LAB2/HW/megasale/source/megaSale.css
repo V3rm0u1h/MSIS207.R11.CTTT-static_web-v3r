@@ -179,6 +179,13 @@
 
 .sale-reservation .sale-card__facts { margin-bottom: 1rem; }
 
+/* T-06: why an action is unavailable */
+.sale-reason {
+    margin: 0.5rem 0 0;
+    color: var(--sale-muted);
+    font-size: 0.9375rem;
+}
+
 /* T-05: checkout actions and confirmation */
 .sale-reservation__actions {
     display: flex;

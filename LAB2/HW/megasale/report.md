@@ -495,3 +495,79 @@ Mutation checks (each made tests fail, then the code was restored):
 | Failed payment always returns to LOCKED | 1 |
 | Stock committed before the transition is validated | 2 |
 | Checkout button stays enabled while CHECKING_OUT | 1 |
+
+## T-06 — Sale UI integration and race-condition hardening
+
+Commit: `fix(sale): prevent timer and inventory state inconsistencies`
+
+Method: I first wrote `source/integration.test.js`, which drives the
+whole simulator (fake clock, manual timers, real DOM) through the PRD 6
+scenarios, and ran it against the T-05 code. Five of its 11 tests failed.
+These are the defects this milestone fixes:
+
+| # | Failing test (before the fix) | Defect |
+| --- | --- | --- |
+| 1 | returning to the tab after the lock ran out expires it at once, even if no timer has run | Nothing re-checked locks when the page became visible. Throttled timers left an expired lock showing "Reserved (locked)" and its stock unavailable until a timer or tick finally ran |
+| 2 | the sale ending during an active lock keeps the reservation and says so | The end announcement was just "The sale has ended.", which suggests the shopper's held reservation is gone, although it stays valid until its own expiry |
+| 3 | before the start: … reservations unavailable with a reason | Disabled Reserve had only a short label ("Opens at 00:05"), with no explanation linked to it |
+| 4 | after the end, a sale with no active lock refuses new reservations and explains why | Same, for "Sale ended" and "Sold out" |
+| 5 | disabled Checkout and Cancel explain why while a reservation or payment is in progress | Checkout / Cancel were disabled during RESERVING and CHECKING_OUT with no reason |
+
+| File | Change |
+| --- | --- |
+| `source/mountMegaSale.js` | `visibilitychange` → `store.sweepExpired()` (listener removed on dispose); end-of-sale announcement mentions a held lock and its end time; the purchase confirmation is read from the store by reservation id instead of a kept snapshot |
+| `source/productCard.js` | `primaryAction` and `panelReason` return a reason for every disabled action; a visible `<p class="sale-reason">` linked with `aria-describedby` |
+| `source/megaSale.css` | `.sale-reason` |
+| `source/integration.test.js` | 11 whole-simulator tests for the PRD 6 scenarios |
+
+Key decisions:
+
+- **Single source of truth.** Every number and state on the card is read
+  from the store when the card renders: stock buckets, the active
+  reservation and, now, the purchase confirmation (`store.get(id)`). The UI
+  keeps only the typed quantity and the id of the last purchase. A test
+  checks that the confirmation always refers to a PURCHASED record.
+- **Resume.** Countdowns already recompute from the clock on the next tick.
+  Locks are now also validated when the tab becomes visible again:
+  `sweepExpired()` expires every due lock at once, releases its stock once
+  and announces it. A test advances the clock past the lock with no timer
+  or tick, fires `visibilitychange` and checks the lock is gone, then fires
+  the late timers and ticks and checks nothing changes.
+- **Expiry vs. checkout ordering.** Both paths validate the same record
+  against the current time and state before touching stock (T-04/T-05).
+  The integration tests confirm it end to end: checkout 1 ms before
+  `expiresAt` sells; at `expiresAt` it does not, even with no timer run.
+  Cancel 1 ms before expiry releases once, and the expiry that follows
+  changes nothing.
+- **Identity.** A replaced reservation is unaffected by the old lock's
+  countdown and timer, and the panel shows the new id.
+- **Campaign end.** New reservations stop and the Reserve button explains
+  why. A lock held at the end stays, its stock stays reserved, and the
+  announcement says "The sale has ended. Your reservation of 2 units is
+  still held until 00:42:10; you can still check out."
+- **Accessible feedback.** Every disabled action now has a visible reason
+  linked by `aria-describedby`:
+  - before the start: "Reservations open when the sale starts at …"
+  - sold out: "All units are reserved or sold. Units come back if a
+    reservation expires or is cancelled."
+  - ended: "The sale has ended, so new reservations are closed."
+  - reserving: "Checkout and cancel become available once your
+    reservation is confirmed."
+  - paying: "Your payment is being processed. You cannot cancel during
+    payment; if it fails, your reservation stays held."
+
+  Status changes go to the one `role="status"` region; the two
+  countdowns are `role="timer"` and are never announced per tick.
+
+Tests: `source/megaSale.test.html` — 116/116 passed (headless Edge 155). The
+11 integration tests cover the upcoming state with a reason; the sale ending
+during a lock (kept, announced, still purchasable); refusal after the end
+with a reason; resuming a tab after the lock ran out; reasons on disabled
+Checkout and Cancel; five rapid reserve clicks making one reservation;
+checkout 1 ms before and exactly at expiry; cancel just before expiry
+followed by the expiry timer; a replaced reservation and the old lock's
+callbacks; the confirmation matching the store; and `dispose()` removing
+the same `visibilitychange` listener it added. Every store change in these
+tests is checked against the inventory invariant.
+
+![Disabled Reserve with its reason](images/t06-reason.png)

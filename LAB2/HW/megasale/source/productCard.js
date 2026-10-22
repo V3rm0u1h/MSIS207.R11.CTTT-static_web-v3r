@@ -1,7 +1,7 @@
 /**
  * Vietnam Mega-Sale Simulator — T-01 product card and error view, T-02 countdown
  * line, T-03 stock buckets, reserve form and reservation panel, T-04 lock countdown,
- * T-05 checkout button and purchase confirmation
+ * T-05 checkout button and purchase confirmation, T-06 reasons for disabled actions
  *
  * Pure VNode builders: they take ready-made data and return a tree for
  * renderToDOM. No state, no timers, no DOM access.
@@ -26,6 +26,10 @@
  *
  * Elements that can hold focus carry data-focus, so the mount can put focus
  * back on the same control (or the next sensible one) after a re-render.
+ *
+ * Every disabled action is explained (T-06): a <p> with the reason, linked
+ * to the disabled button(s) with aria-describedby, so the reason is both
+ * visible and read with the button.
  *
  * Prices are told apart by text, not only by styling: each one has its own
  * <dt> label ("Original price", "Sale price"), because screen readers do not
@@ -67,12 +71,34 @@ export const RESERVATION_STATE_LABELS = Object.freeze({
     [RESERVATION_STATE.CANCELLED]: "Cancelled"
 });
 
-/** Label and enabled state of the primary button for a status and the units available. */
+/** Label, enabled state and (when disabled) the reason for the primary button. */
 export function primaryAction(status, available, config, format) {
-    if (status === SALE_STATUS.UPCOMING) return { label: `Opens at ${format.time(config.startsAt)}`, disabled: true };
-    if (status === SALE_STATUS.ENDED) return { label: "Sale ended", disabled: true };
-    if (available === 0) return { label: "Sold out", disabled: true };
-    return { label: "Reserve now", disabled: false };
+    if (status === SALE_STATUS.UPCOMING) {
+        return { label: `Opens at ${format.time(config.startsAt)}`, disabled: true,
+            reason: `Reservations open when the sale starts at ${format.timeWithSeconds(config.startsAt)}.` };
+    }
+    if (status === SALE_STATUS.ENDED) {
+        return { label: "Sale ended", disabled: true, reason: "The sale has ended, so new reservations are closed." };
+    }
+    if (available === 0) {
+        return { label: "Sold out", disabled: true,
+            reason: "All units are reserved or sold. Units come back if a reservation expires or is cancelled." };
+    }
+    return { label: "Reserve now", disabled: false, reason: null };
+}
+
+/** Why the reservation panel's buttons are disabled in a state, or null when they are not. */
+function panelReason(state) {
+    if (state === RESERVATION_STATE.RESERVING) return "Checkout and cancel become available once your reservation is confirmed.";
+    if (state === RESERVATION_STATE.CHECKING_OUT) {
+        return "Your payment is being processed. You cannot cancel during payment; if it fails, your reservation stays held.";
+    }
+    return null;
+}
+
+/** A visible explanation that disabled controls point to with aria-describedby. */
+function Reason(reasonId, text) {
+    return createElement("p", { id: reasonId, className: "sale-reason", "data-reason": "" }, text);
 }
 
 export function units(count) {
@@ -82,8 +108,10 @@ export function units(count) {
 /** The shopper's active reservation. */
 function ReservationPanel({ id, config, reservation, lockText, format, onCheckout, onCancel }) {
     const headingId = `${id}-reservation`;
+    const reasonId = `${id}-reservation-reason`;
     const { state } = reservation;
     const checkingOut = state === RESERVATION_STATE.CHECKING_OUT;
+    const reason = panelReason(state);
     return createElement("section", { className: "sale-reservation", "aria-labelledby": headingId, "data-reservation-id": reservation.id },
         createElement("h3", { id: headingId }, "Your reservation"),
         createElement("dl", { className: "sale-card__facts" },
@@ -110,6 +138,7 @@ function ReservationPanel({ id, config, reservation, lockText, format, onCheckou
                 "data-action": "checkout",
                 "data-focus": "checkout",
                 disabled: state !== RESERVATION_STATE.LOCKED,
+                "aria-describedby": reason ? reasonId : null,
                 onClick: onCheckout
             }, checkingOut ? "Processing payment…" : "Checkout"),
             " ",
@@ -119,9 +148,11 @@ function ReservationPanel({ id, config, reservation, lockText, format, onCheckou
                 "data-action": "cancel",
                 "data-focus": "cancel",
                 disabled: state !== RESERVATION_STATE.LOCKED,
+                "aria-describedby": reason ? reasonId : null,
                 onClick: onCancel
             }, "Cancel reservation")
-        )
+        ),
+        reason ? Reason(reasonId, reason) : null
     );
 }
 
@@ -169,13 +200,18 @@ function ActionArea(view) {
     if (!action.disabled) {
         return ReserveForm({ id, available: inventory.available, quantity, onSubmit: onReserveSubmit, onQuantityInput });
     }
-    return createElement("button", {
-        type: "button",
-        className: "sale-card__action",
-        "data-action": "reserve",
-        "data-focus": "reserve",
-        disabled: true
-    }, action.label);
+    const reasonId = `${id}-reserve-reason`;
+    return [
+        createElement("button", {
+            type: "button",
+            className: "sale-card__action",
+            "data-action": "reserve",
+            "data-focus": "reserve",
+            disabled: true,
+            "aria-describedby": reasonId
+        }, action.label),
+        Reason(reasonId, action.reason)
+    ];
 }
 
 function term(label, ...details) {
