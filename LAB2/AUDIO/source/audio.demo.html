@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Mini-React audio engine built on the Web Audio API.">
+    <title>Mini-React — Audio Engine</title>
+    <!-- Empty inline icon: no /favicon.ico request, so no 404 in the console. -->
+    <link rel="icon" href="data:,">
+    <link rel="stylesheet" href="audio.css">
+    <style>
+        :root { color-scheme: light; font-family: system-ui, sans-serif; background: var(--audio-page-bg); color: var(--audio-text); }
+        body { margin: 0; padding: 2rem 1rem; }
+        main { max-width: 48rem; margin-inline: auto; }
+        .demo-intro { margin: 0 0 1.25rem; color: var(--audio-muted); line-height: 1.6; }
+    </style>
+</head>
+<body>
+<main>
+    <h1>Mini-React Audio Engine</h1>
+    <p class="demo-intro">Pick a track to download and decode it with the Web Audio API (T-01). The valid tone plays through an analyser; the other two tracks show how a missing file and a corrupted file are reported.</p>
+    <section id="audio-root" aria-label="Audio player"></section>
+    <noscript>JavaScript must be enabled to use the audio player.</noscript>
+</main>
+<script type="module">
+    import { mountAudioPlayer } from "./mountAudioPlayer.js";
+
+    mountAudioPlayer(document.querySelector("#audio-root"), {
+        id: "demo-player",
+        tracks: [
+            { id: "tone", title: "Test tone (440 Hz + 1320 Hz)", url: "assets/tone-a440.wav" },
+            { id: "missing", title: "Missing file (404)", url: "assets/does-not-exist.wav" },
+            { id: "corrupted", title: "Corrupted file", url: "assets/corrupted.wav" }
+        ]
+    });
+</script>
+</body>
+</html>

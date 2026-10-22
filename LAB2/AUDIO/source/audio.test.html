@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mini-React Audio Engine — Tests</title>
+  <!-- Empty inline icon: no /favicon.ico request, so no 404 in the console. -->
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="audio.css">
+  <style>
+    :root { color-scheme: light; font-family: system-ui, sans-serif; color: #182230; background: #f4f6fa; }
+    body { max-width: 760px; margin: 0 auto; padding: 2rem 1rem; }
+    main { padding: 1.5rem; background: #fff; border: 1px solid #d9e0e9; border-radius: 12px; }
+    h1 { margin-top: 0; }
+    #test-summary { font-weight: 700; }
+    li { margin: .45rem 0; }
+    li[data-result="pass"] { color: #17663a; }
+    li[data-result="fail"] { color: #b42318; }
+    #test-sandbox { margin-top: 1.5rem; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Audio Engine Tests</h1>
+    <p>T-01 covers the shared AudioContext, the source → analyser → destination graph, FFT sizes, fetching and decoding (including real WAV and corrupted files), playback, error codes and the player UI.</p>
+    <p id="test-summary" role="status" aria-live="polite">Running tests…</p>
+    <ul id="test-results" aria-label="Test results"></ul>
+    <section id="test-sandbox" aria-label="Test sandbox"></section>
+    <noscript>JavaScript must be enabled to run these tests.</noscript>
+  </main>
+  <script type="module">
+    import { runTests } from "../../HW/source/testHarness.js";
+    import "./audioEngine.test.js";
+    import "./mountAudioPlayer.test.js";
+
+    runTests("Audio engine");
+  </script>
+</body>
+</html>
