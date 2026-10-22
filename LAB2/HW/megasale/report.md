@@ -322,3 +322,93 @@ Mutation checks (each made tests fail, then the code was restored):
 The duplicate mutation first made the suite hang instead of fail: the
 test awaited a second reservation whose processing never finished. That
 await is now raced against one tick.
+
+## T-04 — Optimistic inventory lock and expiry
+
+Commit: `feat(inventory): add expiring inventory reservation locks`
+
+| File | Change |
+| --- | --- |
+| `source/reservationStore.js` | One expiry timer per LOCKED reservation; `expireIfDue(id)` (idempotent) and `sweepExpired()` replace T-03's unconditional `expire(id)`; `reserve()` sweeps due locks first; `cancel()` on a due lock expires it instead; injectable `setTimeout` / `clearTimeout` |
+| `source/productCard.js` | "Lock expires in HH:MM:SS.mmm" (`<time role="timer">`) in the reservation panel |
+| `source/mountMegaSale.js` | A second, display-only countdown for the active lock; expiry announcement; `options.timer.setTimeout` / `clearTimeout` go to the store |
+| `source/megaSale.demo.html` | `?scenario=short-lock`: a live sale with a 20-second lock, to watch a reservation expire |
+
+Key decisions:
+
+- **Absolute expiry.** A lock records `createdAt` and
+  `expiresAt = lock time + lockDurationMs` (5 minutes in the sample). It is
+  valid while `now < expiresAt`, and every check reads the clock. At exactly
+  `expiresAt` the lock is no longer eligible for checkout, even if no timer
+  has run yet (tested with no timer fired).
+- **Release exactly once.** Stock from an expired lock is released only by
+  the `LOCKED → EXPIRED` transition. `expireLockIfDue` checks that the
+  reservation is LOCKED and due, validates the transition, then releases
+  and applies it with no `await` in between. Because the transition can
+  happen once, repeated `expireIfDue` calls, a sweep and a late timer
+  release nothing more (`expired: false`). T-03's `expire(id)` released
+  stock without checking that the lock was due; it has been removed.
+- **Stale callbacks.** The timer callback carries the reservation id and
+  the `expiresAt` it was armed for. It does nothing unless that reservation
+  still exists, still has that `expiresAt` and is still LOCKED. Timers are
+  also cleared on checkout, cancel and purchase. The tests use a "leaky"
+  timer whose `clearTimeout` does nothing, so every old callback really
+  runs: it cannot expire a cancelled reservation, a purchased one, or the
+  newer reservation that replaced it.
+- **Early and late timers.** Browsers can fire timers early (rarely) or very
+  late (background tabs, sleep). An early callback re-arms for the time
+  left. A late one expires the lock once. `reserve()` first sweeps every
+  due lock, so a delayed timer never makes the next shopper see "sold out"
+  for stock that should already be free.
+- **Timer only while LOCKED.** `beginCheckout` disarms it and a failed
+  checkout re-arms it for the *original* expiry (not a fresh 5 minutes). A
+  lock that runs out during checkout is expired by the checkout itself.
+- **Cancellation.** `LOCKED → CANCELLED` releases stock once. A second
+  cancel, checkout or expiry of that reservation is rejected or does
+  nothing. Cancelling at or after `expiresAt` expires it instead, so the
+  stock is still released once and the state tells the truth.
+- **Indivisible operations.** Every method that changes stock goes from its
+  last validation to its last write synchronously: JavaScript runs one task
+  at a time, so nothing can interleave. `reserve()` awaits only the
+  simulated processing step and validates time and stock again after it.
+  The UI has no handler that changes counts; it only calls the store.
+- **Display.** The panel shows "Lock expires in 00:04:59.950", computed
+  from `expiresAt` by a second zero-drift countdown that only displays.
+  When that countdown reaches the lock's `expiresAt`, it asks the store to
+  `expireIfDue` *that* reservation (it remembers the id). This covers a
+  delayed store timer and is harmless if the timer already ran. Expiry is
+  announced: "Your reservation expired. 2 units went back to available
+  stock."
+- **Limitation.** This is in-process consistency for one page. Real
+  inventory locking across clients needs server-side atomic operations,
+  durable reservation records and transactions.
+
+Tests: `source/megaSale.test.html` — 91/91 passed (headless Edge 155). The
+14 new store tests cover: lock creation; validity 1 ms before and at
+`expiresAt`; the timer expiring and releasing; early timers re-arming; very
+late timers; idempotent `expireIfDue` with repeated calls, a sweep and a
+late timer; stale callbacks after cancel-and-replace and after purchase;
+cancel releasing once; cancel at the expiry time; a delayed timer not
+blocking the next shopper; three shoppers competing for the last units;
+disarm and re-arm around checkout; and `dispose()` clearing timers. Four UI
+tests cover the lock countdown (timer role, recomputed from the clock),
+expiry by the store timer (panel removed, stock back, announcement),
+expiry by the display countdown when the store timer is late (and no
+second release when it finally fires), and the lock countdown stopping on
+cancel. A store listener in the lock tests checks the invariant after
+every change and records every release.
+
+Demo check: `?scenario=short-lock` shows "Lock expires in 00:00:17.344" 3 s
+after reserving. After 22 s the panel is gone, stock is back to 50 and the
+live region says "Your reservation expired. 1 unit went back to available
+stock." There are no console errors.
+
+Mutation checks (each made tests fail, then the code was restored):
+
+| Mutation | Failing tests |
+| --- | --- |
+| Expiry releases stock without checking the reservation state | 33 |
+| `beginCheckout` trusts LOCKED without checking `expiresAt` | 2 |
+| Timer callback skips the identity / state check | 3 |
+| `reserve()` does not sweep due locks first | 1 |
+| Re-armed timer gets a fresh full lock duration | 2 |

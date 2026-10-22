@@ -30,6 +30,7 @@
             <li><a href="?scenario=upcoming">Upcoming</a></li>
             <li><a href="?scenario=soon">Starts in 5 s</a></li>
             <li><a href="?scenario=live">Live</a></li>
+            <li><a href="?scenario=short-lock">Live, 20 s lock</a></li>
             <li><a href="?scenario=ended">Ended</a></li>
             <li><a href="?scenario=invalid">Invalid configuration</a></li>
         </ul>
@@ -47,6 +48,8 @@
         // Starts 5 s after load and ends 15 s later: watch both transitions.
         soon: () => createSampleConfig(Date.now(), { startsInMs: 5000, durationMs: 15000 }),
         live: () => createSampleConfig(Date.now(), { startsInMs: -5 * MINUTE_MS }),
+        // Same sale with a 20-second lock, to watch a reservation expire.
+        "short-lock": () => ({ ...createSampleConfig(Date.now(), { startsInMs: -5 * MINUTE_MS }), lockDurationMs: 20_000 }),
         ended: () => createSampleConfig(Date.now(), { startsInMs: -60 * MINUTE_MS }),
         // Sale price above the original, negative stock, end before start.
         invalid: () => ({ ...createSampleConfig(Date.now()), salePrice: 2_000_000, initialInventory: -3, endsAt: 0 })

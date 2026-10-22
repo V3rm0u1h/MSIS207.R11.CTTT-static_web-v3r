@@ -22,7 +22,7 @@
 <body>
   <main>
     <h1>Mega-Sale Simulator Tests</h1>
-    <p>T-01 covers the centralized campaign configuration and its validation, status derived from the schedule and the clock, the product card, the status-driven action button, the configuration error view and mounting. T-02 covers the zero-drift countdown: wall-clock remaining time, HH:MM:SS.mmm formatting, delayed callbacks, status changes at the target and timer cleanup. T-03 covers the reservation state machine, inventory accounting, the authoritative reservation store and the reserve / cancel UI.</p>
+    <p>T-01 covers the centralized campaign configuration and its validation, status derived from the schedule and the clock, the product card, the status-driven action button, the configuration error view and mounting. T-02 covers the zero-drift countdown: wall-clock remaining time, HH:MM:SS.mmm formatting, delayed callbacks, status changes at the target and timer cleanup. T-03 covers the reservation state machine, inventory accounting, the authoritative reservation store and the reserve / cancel UI. T-04 covers expiring locks: absolute expiry, the expiry timer, idempotent release, stale callbacks, cancellation and the lock countdown.</p>
     <p id="test-summary" role="status" aria-live="polite">Running tests…</p>
     <ul id="test-results" aria-label="Test results"></ul>
     <section id="test-sandbox" aria-label="Test sandbox"></section>
@@ -34,6 +34,7 @@
     import "./mountMegaSale.test.js";
     import "./countdown.test.js";
     import "./reservation.test.js";
+    import "./locks.test.js";
 
     runTests("Mega-Sale");
   </script>

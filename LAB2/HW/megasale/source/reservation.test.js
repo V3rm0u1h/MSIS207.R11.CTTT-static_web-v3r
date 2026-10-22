@@ -13,6 +13,7 @@ import { createInventory, assertInventoryInvariant } from "./inventory.js";
 import { createReservationStore } from "./reservationStore.js";
 import { createSampleConfig, validateSaleConfig } from "./saleConfig.js";
 import { test, assert, assertEqual, assertDeepEqual, assertThrowsType } from "../../source/testHarness.js";
+import { manualTimer } from "./countdown.test.js";
 
 // T-03 — reservation state machine, inventory accounting and the authoritative store.
 
@@ -42,6 +43,7 @@ function setup({ inventory = 10, at = START + 1000, configOverrides = {} } = {})
         ...configOverrides
     });
     const clock = { now: at };
+    const timer = manualTimer();
     let sequence = 0;
     const gates = [];
     const changes = [];
@@ -49,7 +51,9 @@ function setup({ inventory = 10, at = START + 1000, configOverrides = {} } = {})
         config,
         now: () => clock.now,
         createId: () => `res-${++sequence}`,
-        process: () => (gates.length > 0 ? gates.shift() : Promise.resolve())
+        process: () => (gates.length > 0 ? gates.shift() : Promise.resolve()),
+        setTimeout: timer.setTimeout,
+        clearTimeout: timer.clearTimeout
     });
     store.subscribe((change, stock) => {
         // Recorded, not thrown: the store would only log a throwing listener.
@@ -67,7 +71,7 @@ function setup({ inventory = 10, at = START + 1000, configOverrides = {} } = {})
         gates.push(new Promise((resolve, reject) => { release = resolve; fail = reject; }));
         return { release: () => release(), fail: (error) => fail(error) };
     }
-    return { config, clock, store, changes, hold };
+    return { config, clock, store, changes, hold, timer };
 }
 
 // --- State machine ---
@@ -309,7 +313,7 @@ test("checkout that outlives the lock ends EXPIRED, never PURCHASED", async () =
 });
 
 test("cancel and expire release the stock; cancelled or expired reservations cannot be purchased", async () => {
-    const { store } = setup();
+    const { store, clock } = setup();
     const first = await store.reserve({ quantity: 3 });
     assertEqual(store.cancel(first.id).state, S.CANCELLED, "Cancelled");
     assertEqual(store.inventory.available, 10, "Released on cancel");
@@ -317,7 +321,8 @@ test("cancel and expire release the stock; cancelled or expired reservations can
     await expectReservationError(() => store.beginCheckout(first.id), CODES.INVALID_TRANSITION);
 
     const second = await store.reserve({ quantity: 2 });
-    assertEqual(store.expire(second.id).state, S.EXPIRED, "Expired");
+    clock.now = second.expiresAt;
+    assertEqual(store.expireIfDue(second.id).reservation.state, S.EXPIRED, "Expired");
     assertEqual(store.inventory.available, 10, "Released on expiry");
     await expectReservationError(() => store.completeCheckout(second.id), CODES.INVALID_TRANSITION);
 });
@@ -333,14 +338,15 @@ test("the invariant holds and counts stay non-negative across a long mixed seque
                 else if (round % 3 === 0) store.cancel(active.id);
                 else if (round % 3 === 1) store.beginCheckout(active.id);
                 else if (active.state === S.CHECKING_OUT) store.completeCheckout(active.id);
-                else store.expire(active.id);
+                else store.expireIfDue(active.id);
             } catch (error) {
                 assert(error instanceof ReservationError, `Only expected rejections: ${error.message}`);
             }
             const stock = store.inventory;
             assertInventoryInvariant(stock);
         }
-        clock.now += 1000;
+        // Big steps so some locks run out between rounds.
+        clock.now += LOCK_MS / 2;
     }
     const held = store.list().filter((reservation) => isActiveState(reservation.state) && reservation.state !== S.RESERVING)
         .reduce((sum, reservation) => sum + reservation.quantity, 0);
@@ -355,6 +361,7 @@ test("the store validates its options and requests", async () => {
     assertThrowsType(() => createReservationStore(null), /plain object/);
     assertThrowsType(() => createReservationStore({ config: { ...config } }), /validated/);
     assertThrowsType(() => createReservationStore({ config, process: 1 }), /process/);
+    assertThrowsType(() => createReservationStore({ config, setTimeout: null }), /setTimeout/);
     const { store } = setup();
     let error;
     try { await store.reserve({ quantity: 1, shopperId: "Not Valid" }); } catch (caught) { error = caught; }

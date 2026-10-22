@@ -10,6 +10,7 @@ import { test, assert, assertEqual, assertDeepEqual, assertThrowsType, wait } fr
 export function manualTimer() {
     let nextId = 1;
     const intervals = new Map();
+    const timeouts = new Map();
     return {
         setInterval(callback, ms) {
             const id = nextId++;
@@ -19,7 +20,22 @@ export function manualTimer() {
         clearInterval(id) { intervals.delete(id); },
         tick() { for (const { callback } of [...intervals.values()]) callback(); },
         get active() { return intervals.size; },
-        get delays() { return [...intervals.values()].map(({ ms }) => ms); }
+        get delays() { return [...intervals.values()].map(({ ms }) => ms); },
+        // One-shot timers run only on fireTimeouts(), whatever their delay: a test
+        // decides when a (possibly late or early) timer callback happens.
+        setTimeout(callback, ms) {
+            const id = nextId++;
+            timeouts.set(id, { callback, ms });
+            return id;
+        },
+        clearTimeout(id) { timeouts.delete(id); },
+        fireTimeouts() {
+            const due = [...timeouts.values()];
+            timeouts.clear();
+            for (const { callback } of due) callback();
+        },
+        get pendingTimeouts() { return timeouts.size; },
+        get timeoutDelays() { return [...timeouts.values()].map(({ ms }) => ms); }
     };
 }
 

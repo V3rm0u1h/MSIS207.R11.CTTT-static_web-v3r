@@ -1,6 +1,6 @@
 /**
  * Vietnam Mega-Sale Simulator — T-01 mount and wiring, T-02 countdown,
- * T-03 reservations
+ * T-03 reservations, T-04 lock countdown
  *
  * Layout inside the mount root:
  *   <article>          product card, re-rendered when the derived view changes
@@ -26,6 +26,13 @@
  * from the store's snapshots whenever the store reports a change. Outcomes
  * and rejections are announced in the live region. options.processReservation
  * and options.createId are passed to the store for tests.
+ *
+ * Locks (T-04): the store expires locks itself (one timer per lock, checked
+ * against the clock). The card shows the time left on the active lock with a
+ * second zero-drift countdown that only displays; when it reaches the lock's
+ * expiresAt it asks the store to expireIfDue() that same reservation, which
+ * is harmless if the store's timer already did. options.timer.setTimeout and
+ * clearTimeout are passed to the store for tests.
  */
 
 import { renderToDOM } from "../../source/renderToDOM.js";
@@ -35,11 +42,12 @@ import { validateSaleConfig } from "./saleConfig.js";
 import { getCampaignStatus, SALE_STATUS } from "./saleStatus.js";
 import { createCountdown, formatDuration, remainingMs } from "./countdown.js";
 import { createReservationStore } from "./reservationStore.js";
-import { ReservationError } from "./reservationMachine.js";
+import { ReservationError, RESERVATION_EVENT, RESERVATION_STATE } from "./reservationMachine.js";
 import { ProductCard, ConfigErrorView, createFormatters, units } from "./productCard.js";
 
 const ID_PATTERN = /^[a-z0-9-]+$/;
 const SHOPPER_ID = "you";
+const LOCKED_STATES = new Set([RESERVATION_STATE.LOCKED, RESERVATION_STATE.CHECKING_OUT]);
 
 function isPlainObject(value) {
     if (value === null || typeof value !== "object") return false;
@@ -101,7 +109,9 @@ export function mountMegaSale(root, props, options = {}) {
         config,
         now: readNow,
         ...(processReservation ? { process: processReservation } : {}),
-        ...(createId ? { createId } : {})
+        ...(createId ? { createId } : {}),
+        ...(timer.setTimeout ? { setTimeout: timer.setTimeout } : {}),
+        ...(timer.clearTimeout ? { clearTimeout: timer.clearTimeout } : {})
     });
 
     function describeError(error) {
@@ -150,10 +160,17 @@ export function mountMegaSale(root, props, options = {}) {
         return null;
     }
 
+    /** The active reservation's lock end, while it still holds stock. */
+    function lockEnd(reservation) {
+        return reservation && LOCKED_STATES.has(reservation.state) ? reservation.expiresAt : null;
+    }
+
     function cardTree() {
         const at = readNow();
         const status = getCampaignStatus(config, at);
         const target = targetFor(status);
+        const reservation = store.activeFor(SHOPPER_ID);
+        const lockAt = lockEnd(reservation);
         renderedStatus = status;
         return ProductCard({
             id,
@@ -161,7 +178,8 @@ export function mountMegaSale(root, props, options = {}) {
             status,
             inventory: store.inventory,
             countdownText: formatDuration(target === null ? 0 : remainingMs(target, at)),
-            reservation: store.activeFor(SHOPPER_ID),
+            reservation,
+            lockText: formatDuration(lockAt === null ? 0 : remainingMs(lockAt, at)),
             quantity: state.quantity,
             format,
             onReserveSubmit: handleReserveSubmit,
@@ -182,6 +200,7 @@ export function mountMegaSale(root, props, options = {}) {
     }, ""));
     root.replaceChildren(cardElement, statusElement);
     let countdownElement = cardElement.querySelector("[data-countdown]");
+    let lockCountdownElement = cardElement.querySelector("[data-lock-countdown]");
 
     function setMessage(text) {
         statusElement.textContent = text;
@@ -200,6 +219,7 @@ export function mountMegaSale(root, props, options = {}) {
         cardElement.replaceWith(next);
         cardElement = next;
         countdownElement = cardElement.querySelector("[data-countdown]");
+        lockCountdownElement = cardElement.querySelector("[data-lock-countdown]");
         if (!hadFocus) return;
         const same = focusKey === null ? null : cardElement.querySelector(`[data-focus="${focusKey}"]`);
         const target = (same && !same.disabled ? same : null) ??
@@ -208,8 +228,40 @@ export function mountMegaSale(root, props, options = {}) {
         target.focus();
     }
 
-    // Every accepted reservation change re-renders the card from the store.
-    const unsubscribe = store.subscribe(() => refresh());
+    // Display-only countdown for the active lock. lockTarget remembers which
+    // reservation it counts for, so reaching zero can only expire that one.
+    let lockTarget = null;
+    const lockCountdown = createCountdown({
+        ...timer,
+        now: readNow,
+        getTarget(at) {
+            const reservation = store.activeFor(SHOPPER_ID);
+            const end = lockEnd(reservation);
+            lockTarget = end !== null && end > at ? { id: reservation.id, expiresAt: end } : null;
+            return lockTarget ? lockTarget.expiresAt : null;
+        },
+        onTick(ms) {
+            if (!lockCountdownElement) return;
+            const text = formatDuration(ms);
+            if (lockCountdownElement.textContent !== text) lockCountdownElement.textContent = text;
+        },
+        onReached(target) {
+            const reached = lockTarget;
+            if (!reached || reached.expiresAt !== target) return;
+            store.expireIfDue(reached.id);
+        }
+    });
+
+    // Every accepted reservation change re-renders the card from the store and
+    // restarts the lock countdown for whatever reservation is now active.
+    const unsubscribe = store.subscribe((change) => {
+        refresh();
+        if (change.type === RESERVATION_EVENT.EXPIRE && change.reservation.shopperId === SHOPPER_ID) {
+            setMessage(`Your reservation expired. ${units(change.reservation.quantity)} went back to available stock.`);
+        }
+        lockCountdown.stop();
+        lockCountdown.start();
+    });
 
     const countdown = createCountdown({
         ...timer,
@@ -243,6 +295,7 @@ export function mountMegaSale(root, props, options = {}) {
             if (!mounted) return;
             mounted = false;
             countdown.dispose();
+            lockCountdown.dispose();
             unsubscribe();
             store.dispose();
             root.replaceChildren();

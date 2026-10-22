@@ -22,7 +22,12 @@ function mount(props = {}, at = START, options = {}) {
     let sequence = 0;
     const handle = mountMegaSale(root, { id: "sale", config, ...props }, {
         now: () => clock.now,
-        timer: { setInterval: timer.setInterval, clearInterval: timer.clearInterval },
+        timer: {
+            setInterval: timer.setInterval,
+            clearInterval: timer.clearInterval,
+            setTimeout: timer.setTimeout,
+            clearTimeout: timer.clearTimeout
+        },
         processReservation: () => Promise.resolve(),
         createId: () => `reservation-${++sequence}`,
         ...options
@@ -259,7 +264,7 @@ test("an ended sale mounts with zero and schedules no timer", () => {
 
 test("dispose() clears the countdown interval", () => {
     const { handle, timer } = mount({}, START - 10_000);
-    assertEqual(timer.active, 1, "One interval while mounted");
+    assertEqual(timer.active, 1, "One interval while mounted (the lock countdown is idle)");
     handle.dispose();
     assertEqual(timer.active, 0, "Cleared");
 });
@@ -391,4 +396,59 @@ test("an active reservation stays visible when stock reaches zero", async () => 
     await settle();
     assertEqual(stock(root, "available"), "0", "Sold out for others");
     assert(root.querySelector("section.sale-reservation"), "Your reservation is still shown");
+});
+
+// --- T-04: lock countdown and expiry in the UI ---
+
+const lockText = (root) => root.querySelector("[data-lock-countdown]")?.textContent ?? null;
+
+async function reserveUnits(root, value) {
+    typeQuantity(root, value);
+    action(root).click();
+    await settle();
+}
+
+test("the reservation panel shows the time left on the lock in a non-live timer", async () => {
+    const { root, clock, timer } = mount();
+    await reserveUnits(root, "2");
+    assertEqual(lockText(root), "00:05:00.000", "Full lock duration");
+    const time = root.querySelector("[data-lock-countdown]");
+    assertEqual(time.getAttribute("role"), "timer", "Timer role");
+    assertEqual(time.getAttribute("aria-live"), null, "Not announced every tick");
+    clock.now += 61_250;
+    timer.tick();
+    assertEqual(lockText(root), "00:03:58.750", "Recomputed from the clock");
+});
+
+test("when the store's expiry timer fires, the panel goes, stock returns and the expiry is announced", async () => {
+    const { root, clock, timer, handle } = mount();
+    await reserveUnits(root, "2");
+    clock.now = handle.store.activeFor().expiresAt;
+    timer.fireTimeouts();
+    assertEqual(root.querySelector("section.sale-reservation"), null, "Panel removed");
+    assertEqual(stock(root, "available"), "50", "Stock back");
+    assertEqual(stock(root, "reserved"), "0", "Nothing reserved");
+    assertEqual(message(root), "Your reservation expired. 2 units went back to available stock.", "Announced");
+    assert(root.querySelector("form"), "Can reserve again");
+});
+
+test("if the expiry timer is delayed, the lock countdown reaching zero expires that reservation", async () => {
+    const { root, clock, timer, handle } = mount();
+    await reserveUnits(root, "1");
+    const { id, expiresAt } = handle.store.activeFor();
+    clock.now = expiresAt + 5;
+    timer.tick(); // the display countdown runs; the store's timeout has not fired
+    assertEqual(handle.store.get(id).state, "EXPIRED", "Expired from the countdown");
+    assertEqual(stock(root, "available"), "50", "Released");
+    timer.fireTimeouts();
+    assertEqual(handle.inventory.available, 50, "The late store timer releases nothing more");
+});
+
+test("the lock countdown stops when the reservation is cancelled", async () => {
+    const { root, timer } = mount();
+    await reserveUnits(root, "1");
+    assertEqual(timer.active, 2, "Sale countdown and lock countdown");
+    root.querySelector("[data-action=cancel]").click();
+    assertEqual(timer.active, 1, "Only the sale countdown remains");
+    assertEqual(timer.pendingTimeouts, 0, "Store expiry timer cleared");
 });

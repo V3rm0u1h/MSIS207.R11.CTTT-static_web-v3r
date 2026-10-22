@@ -1,6 +1,6 @@
 /**
  * Vietnam Mega-Sale Simulator — T-01 product card and error view, T-02 countdown
- * line, T-03 stock buckets, reserve form and reservation panel
+ * line, T-03 stock buckets, reserve form and reservation panel, T-04 lock countdown
  *
  * Pure VNode builders: they take ready-made data and return a tree for
  * renderToDOM. No state, no timers, no DOM access.
@@ -17,7 +17,8 @@
  *     one of:
  *       <form>     LIVE, stock left, no active reservation: labelled quantity
  *                  field and a submit button "Reserve now"
- *       <section>  an active reservation: id, state, quantity, lock end, Cancel
+ *       <section>  an active reservation: id, state, quantity, lock end, time
+ *                  left on the lock (<time role="timer">), Cancel
  *       <button>   otherwise: disabled, label says why (opens at…, sold out, ended)
  *
  * Elements that can hold focus carry data-focus, so the mount can put focus
@@ -76,7 +77,7 @@ export function units(count) {
 }
 
 /** The shopper's active reservation. */
-function ReservationPanel({ id, reservation, format, onCancel }) {
+function ReservationPanel({ id, reservation, lockText, format, onCancel }) {
     const headingId = `${id}-reservation`;
     const { state } = reservation;
     return createElement("section", { className: "sale-reservation", "aria-labelledby": headingId, "data-reservation-id": reservation.id },
@@ -89,6 +90,12 @@ function ReservationPanel({ id, reservation, format, onCancel }) {
                 ? null
                 : term("Locked until", createElement("time", { datetime: new Date(reservation.expiresAt).toISOString() }, format.timeWithSeconds(reservation.expiresAt)))
         ),
+        reservation.expiresAt === null
+            ? null
+            : createElement("p", { className: "sale-lock" },
+                "Lock expires in ",
+                createElement("time", { className: "sale-lock__time", role: "timer", "aria-atomic": "true", "data-lock-countdown": "" }, lockText)
+            ),
         createElement("button", {
             type: "button",
             className: "sale-card__secondary",
@@ -122,9 +129,9 @@ function ReserveForm({ id, available, quantity, onSubmit, onQuantityInput }) {
 }
 
 function ActionArea(view) {
-    const { id, config, status, inventory, reservation, quantity, format, onReserveSubmit, onQuantityInput, onCancel } = view;
+    const { id, config, status, inventory, reservation, lockText, quantity, format, onReserveSubmit, onQuantityInput, onCancel } = view;
     if (reservation && isActiveState(reservation.state)) {
-        return ReservationPanel({ id, reservation, format, onCancel });
+        return ReservationPanel({ id, reservation, lockText, format, onCancel });
     }
     const action = primaryAction(status, inventory.available, config, format);
     if (!action.disabled) {
@@ -144,8 +151,8 @@ function term(label, ...details) {
 }
 
 /**
- * view: { id, config, status, inventory, countdownText, reservation, quantity,
- *         format, onReserveSubmit, onQuantityInput, onCancel }
+ * view: { id, config, status, inventory, countdownText, reservation, lockText,
+ *         quantity, format, onReserveSubmit, onQuantityInput, onCancel }
  * config must already be validated; inventory is { total, available, reserved, sold };
  * reservation is the shopper's active reservation snapshot or null.
  */

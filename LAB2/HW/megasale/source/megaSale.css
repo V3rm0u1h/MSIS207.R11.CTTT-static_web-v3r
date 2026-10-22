@@ -179,6 +179,20 @@
 
 .sale-reservation .sale-card__facts { margin-bottom: 1rem; }
 
+/* T-04: time left on the lock */
+.sale-lock {
+    margin: 0 0 1rem;
+    color: var(--sale-muted);
+}
+
+.sale-lock__time {
+    display: inline-block;
+    color: var(--sale-text);
+    font-size: 1.25rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+
 .sale-card__secondary {
     min-height: 2.75rem;
     padding: 0.5rem 1rem;

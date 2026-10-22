@@ -1,5 +1,6 @@
 /**
- * Vietnam Mega-Sale Simulator — T-03 authoritative reservation controller
+ * Vietnam Mega-Sale Simulator — T-03 authoritative reservation controller,
+ * T-04 expiring locks
  *
  * The one place that changes reservations and stock for a campaign. The UI
  * only calls these methods and renders the snapshots they return.
@@ -7,7 +8,7 @@
  * reserve() follows the PRD order:
  *   1. the campaign is LIVE (reads the injected clock)
  *   2. the quantity is a whole number of 1 or more
- *   3. enough stock is available
+ *   3. enough stock is available (after releasing locks that are already due)
  *   4. the shopper has no active reservation (no double reserve)
  *   5. IDLE -> RESERVING, then the simulated processing step runs
  *   6. checks 1 and 3 again (time and stock may have changed), then
@@ -15,9 +16,29 @@
  * Steps 1-4 reject without creating a reservation or touching stock. A
  * failure in step 6 moves RESERVING -> IDLE and leaves stock unchanged.
  *
- * Lock expiry is applied lazily here: a checkout on a lock whose expiresAt
- * has passed expires it (stock released) and is rejected. A timer that
- * expires locks on its own is not part of T-03.
+ * Expiring locks (T-04):
+ * - A lock is valid while now < expiresAt (an absolute timestamp). Every
+ *   check reads the clock; no countdown is trusted.
+ * - Each LOCKED reservation has one expiry timer, armed for expiresAt. The
+ *   callback carries the reservation id and the expiresAt it was armed for.
+ *   It does nothing unless that reservation still exists, still has that
+ *   expiresAt and is still LOCKED, so a late callback cannot touch a
+ *   purchased, cancelled or replaced reservation. A callback that fires early
+ *   re-arms itself.
+ * - expireIfDue(id) is idempotent: it releases stock only on the
+ *   LOCKED -> EXPIRED transition, which can happen once. Calling it again, or
+ *   before the lock is due, changes nothing.
+ * - The timer only runs while LOCKED: it is cleared on checkout, cancel and
+ *   purchase, and re-armed when a failed checkout returns to LOCKED. A lock
+ *   that runs out during checkout is expired by the checkout itself.
+ * - sweepExpired() expires every lock that is due. reserve() calls it first,
+ *   so stock from abandoned locks is free again even if a timer was delayed.
+ *
+ * Every method that changes stock is synchronous from its last validation to
+ * its last write: the state is checked, the transition applied and the
+ * inventory moved with no await in between, so no other operation can run in
+ * the middle (JavaScript runs one task at a time). reserve() awaits only the
+ * simulated processing step, and validates everything again after it.
  *
  * This is in-memory, single-page state. It keeps stock consistent for the
  * reservations it sees; it cannot coordinate several browsers or devices.
@@ -56,8 +77,9 @@ const wait = (ms) => new Promise((resolve) => { setTimeout(resolve, ms); });
 
 /**
  * options.config: a validated sale config (from validateSaleConfig).
- * options.now, createId and process exist for tests. process(snapshot) is the
- * simulated server round trip while RESERVING; it defaults to a 400 ms wait.
+ * options.now, createId, process, setTimeout and clearTimeout exist for
+ * tests. process(snapshot) is the simulated server round trip while
+ * RESERVING; it defaults to a 400 ms wait.
  */
 export function createReservationStore(options) {
     if (!isPlainObject(options)) throw new TypeError("Reservation store: options must be a plain object.");
@@ -65,18 +87,22 @@ export function createReservationStore(options) {
         config,
         now = Date.now,
         createId = defaultIdFactory(),
-        process = () => wait(DEFAULT_PROCESSING_MS)
+        process = () => wait(DEFAULT_PROCESSING_MS),
+        setTimeout: setTimeoutFn = globalThis.setTimeout?.bind(globalThis),
+        clearTimeout: clearTimeoutFn = globalThis.clearTimeout?.bind(globalThis)
     } = options;
     if (!isPlainObject(config) || !Object.isFrozen(config)) {
         throw new TypeError("Reservation store: config must be a validated (frozen) sale config.");
     }
-    for (const [name, value] of Object.entries({ now, createId, process })) {
+    for (const [name, value] of Object.entries({ now, createId, process, setTimeout: setTimeoutFn, clearTimeout: clearTimeoutFn })) {
         if (typeof value !== "function") throw new TypeError(`Reservation store: ${name} must be a function.`);
     }
 
     const inventory = createInventory(config.initialInventory);
     const reservations = new Map();
     const listeners = new Set();
+    // Reservation id -> pending expiry timer handle; only LOCKED reservations have one.
+    const expiryTimers = new Map();
     let disposed = false;
 
     function readNow() {
@@ -108,6 +134,8 @@ export function createReservationStore(options) {
     function apply(record, event, changes = {}) {
         const next = transition(record.state, event);
         Object.assign(record, changes, { state: next, updatedAt: readNow() });
+        if (next === S.LOCKED) armExpiry(record);
+        else disarmExpiry(record.id);
         const result = snapshot(record);
         notify({ type: event, reservation: result });
         return result;
@@ -118,6 +146,66 @@ export function createReservationStore(options) {
         if (!record) throw new ReservationError(CODES.NOT_FOUND, "That reservation does not exist.");
         return record;
     }
+
+    // --- Expiry ---
+
+    function armExpiry(record) {
+        disarmExpiry(record.id);
+        const { id, expiresAt } = record;
+        const delay = Math.max(0, expiresAt - readNow());
+        expiryTimers.set(id, setTimeoutFn(() => onExpiryTimer(id, expiresAt), delay));
+    }
+
+    function disarmExpiry(id) {
+        if (!expiryTimers.has(id)) return;
+        clearTimeoutFn(expiryTimers.get(id));
+        expiryTimers.delete(id);
+    }
+
+    /**
+     * Timer callback. It acts only on the reservation it was armed for: same
+     * id, same expiresAt, still LOCKED. Anything else is a stale callback.
+     */
+    function onExpiryTimer(id, armedFor) {
+        if (disposed) return;
+        expiryTimers.delete(id);
+        const record = reservations.get(id);
+        if (!record || record.expiresAt !== armedFor || record.state !== S.LOCKED) return;
+        // Browsers may fire a timer early; re-arm until the lock is really due.
+        if (!expireLockIfDue(record, readNow())) armExpiry(record);
+    }
+
+    /** LOCKED and due -> EXPIRED with its stock released. The only path that releases expired stock. */
+    function expireLockIfDue(record, at) {
+        if (record.state !== S.LOCKED || at < record.expiresAt) return false;
+        // Validate the transition before moving stock, so a rejected move changes nothing.
+        transition(record.state, E.EXPIRE);
+        inventory.release(record.quantity);
+        apply(record, E.EXPIRE);
+        return true;
+    }
+
+    /** A lock that ran out while CHECKING_OUT: expired by the checkout that found it. */
+    function expireCheckoutIfDue(record, at) {
+        if (record.state !== S.CHECKING_OUT || at < record.expiresAt) return false;
+        transition(record.state, E.EXPIRE);
+        inventory.release(record.quantity);
+        apply(record, E.EXPIRE);
+        return true;
+    }
+
+    /** Expire every due lock. Returns the snapshots that expired. */
+    function sweepExpired() {
+        if (disposed) return [];
+        const at = readNow();
+        const expired = [];
+        for (const record of reservations.values()) {
+            if (expireLockIfDue(record, at)) expired.push(snapshot(record));
+        }
+        return expired;
+    }
+
+    // --- Reserving ---
 
     function assertLive(at) {
         const status = getCampaignStatus(config, at);
@@ -141,16 +229,6 @@ export function createReservationStore(options) {
         return null;
     }
 
-    /** Expire a lock whose time is up: release its stock. Returns true if it expired. */
-    function expireIfDue(record, at) {
-        if ((record.state === S.LOCKED || record.state === S.CHECKING_OUT) && at >= record.expiresAt) {
-            inventory.release(record.quantity);
-            apply(record, E.EXPIRE);
-            return true;
-        }
-        return false;
-    }
-
     async function reserve(request = {}) {
         assertUsable();
         if (!isPlainObject(request)) throw new TypeError("Reservation store: reserve() takes a plain object.");
@@ -163,6 +241,8 @@ export function createReservationStore(options) {
         if (!Number.isSafeInteger(quantity) || quantity <= 0) {
             throw new ReservationError(CODES.INVALID_QUANTITY, "Quantity must be a whole number of 1 or more.");
         }
+        // Locks that are already due free their stock before it is counted.
+        sweepExpired();
         assertStock(quantity);
         const existing = activeFor(shopperId);
         if (existing) {
@@ -192,8 +272,10 @@ export function createReservationStore(options) {
         try {
             await process(reserving);
             if (disposed) throw new ReservationError(CODES.DISPOSED, "The sale simulator has been closed.");
+            // From here to the return there is no await: validate, then lock.
             const lockedAt = readNow();
             assertLive(lockedAt);
+            sweepExpired();
             assertStock(quantity);
             inventory.reserve(quantity);
             return apply(record, E.CONFIRM, { expiresAt: lockedAt + config.lockDurationMs });
@@ -207,11 +289,13 @@ export function createReservationStore(options) {
         }
     }
 
+    // --- After the lock ---
+
     /** LOCKED -> CHECKING_OUT, only for a lock that has not expired. */
     function beginCheckout(id) {
         assertUsable();
         const record = find(id);
-        if (expireIfDue(record, readNow())) {
+        if (expireLockIfDue(record, readNow())) {
             throw new ReservationError(CODES.EXPIRED, "Your reservation has expired and the stock was released.");
         }
         if (record.state !== S.LOCKED) {
@@ -225,7 +309,7 @@ export function createReservationStore(options) {
     function completeCheckout(id) {
         assertUsable();
         const record = find(id);
-        if (expireIfDue(record, readNow())) {
+        if (expireCheckoutIfDue(record, readNow())) {
             throw new ReservationError(CODES.EXPIRED, "Your reservation expired before checkout finished.");
         }
         transition(record.state, E.CHECKOUT_SUCCEED);
@@ -237,26 +321,33 @@ export function createReservationStore(options) {
     function failCheckout(id) {
         assertUsable();
         const record = find(id);
-        if (expireIfDue(record, readNow())) return snapshot(record);
+        if (expireCheckoutIfDue(record, readNow())) return snapshot(record);
         return apply(record, E.CHECKOUT_FAIL);
     }
 
-    /** LOCKED -> CANCELLED: reserved stock goes back to available. */
+    /** LOCKED -> CANCELLED: reserved stock goes back to available, once. */
     function cancel(id) {
         assertUsable();
         const record = find(id);
+        // A lock that is already due expires instead: its stock is released by the expiry.
+        if (expireLockIfDue(record, readNow())) {
+            throw new ReservationError(CODES.EXPIRED, "Your reservation had already expired; its stock was released.");
+        }
         transition(record.state, E.CANCEL);
         inventory.release(record.quantity);
         return apply(record, E.CANCEL);
     }
 
-    /** LOCKED | CHECKING_OUT -> EXPIRED: reserved stock goes back to available. */
-    function expire(id) {
+    /**
+     * Expire the reservation if it is LOCKED and its expiresAt has been
+     * reached. Idempotent: returns { expired, reservation }, and only the first
+     * call that finds the lock due releases stock.
+     */
+    function expireIfDue(id) {
         assertUsable();
         const record = find(id);
-        transition(record.state, E.EXPIRE);
-        inventory.release(record.quantity);
-        return apply(record, E.EXPIRE);
+        const expired = expireLockIfDue(record, readNow());
+        return Object.freeze({ expired, reservation: snapshot(record) });
     }
 
     function subscribe(listener) {
@@ -271,7 +362,8 @@ export function createReservationStore(options) {
         completeCheckout,
         failCheckout,
         cancel,
-        expire,
+        expireIfDue,
+        sweepExpired,
         subscribe,
         get: (id) => snapshot(find(id)),
         list: () => [...reservations.values()].map(snapshot),
@@ -280,8 +372,11 @@ export function createReservationStore(options) {
             return record ? snapshot(record) : null;
         },
         get inventory() { return inventory.snapshot(); },
+        /** Number of armed expiry timers (tests and diagnostics). */
+        get pendingExpiryTimers() { return expiryTimers.size; },
         dispose() {
             disposed = true;
+            for (const id of [...expiryTimers.keys()]) disarmExpiry(id);
             listeners.clear();
         }
     });
