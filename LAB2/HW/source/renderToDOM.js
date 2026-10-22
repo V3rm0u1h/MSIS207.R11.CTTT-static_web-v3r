@@ -17,7 +17,9 @@ const SUPPORTED_ATTRIBUTES = new Set([
     "alt", "src", "width", "height", "method", "action", "enctype",
     "accept", "pattern", "spellcheck", "contenteditable", "draggable",
     // Table and time semantics required by the Data-Grid (HW PRD 1).
-    "scope", "colspan", "rowspan", "headers", "abbr", "datetime"
+    "scope", "colspan", "rowspan", "headers", "abbr", "datetime",
+    // Language of parts (WCAG 3.1.2) for Vietnamese text (Mega-Sale T-01).
+    "lang"
 ]);
 const BOOLEAN_ATTRIBUTES = new Set([
     "disabled", "hidden", "required", "checked", "selected", "multiple",

@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Vietnam Mega-Sale Simulator — Tests</title>
+  <!-- Empty inline icon: no /favicon.ico request, so no 404 in the console. -->
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="megaSale.css">
+  <style>
+    :root { color-scheme: light; font-family: system-ui, sans-serif; color: #182230; background: #f4f6fa; }
+    body { max-width: 760px; margin: 0 auto; padding: 2rem 1rem; }
+    main { padding: 1.5rem; background: #fff; border: 1px solid #d9e0e9; border-radius: 12px; }
+    h1 { margin-top: 0; }
+    #test-summary { font-weight: 700; }
+    li { margin: .45rem 0; }
+    li[data-result="pass"] { color: #17663a; }
+    li[data-result="fail"] { color: #b42318; }
+    #test-sandbox { margin-top: 1.5rem; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Mega-Sale Simulator Tests</h1>
+    <p>T-01 covers the centralized campaign configuration and its validation, status derived from the schedule and the clock, the product card, the status-driven action button, the configuration error view and mounting.</p>
+    <p id="test-summary" role="status" aria-live="polite">Running tests…</p>
+    <ul id="test-results" aria-label="Test results"></ul>
+    <section id="test-sandbox" aria-label="Test sandbox"></section>
+    <noscript>JavaScript must be enabled to run these tests.</noscript>
+  </main>
+  <script type="module">
+    import { runTests } from "../../source/testHarness.js";
+    import "./saleConfig.test.js";
+    import "./mountMegaSale.test.js";
+
+    runTests("Mega-Sale");
+  </script>
+</body>
+</html>
