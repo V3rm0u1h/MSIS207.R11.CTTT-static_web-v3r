@@ -15,3 +15,22 @@ export const sampleProfile = Object.freeze({
         Object.freeze({ id: "node", name: "Node.js", level: "Intermediate" })
     ])
 });
+
+/**
+ * Stress profile for the 375px QA check (?profile=long): unbroken long words,
+ * long metadata and an HTML-looking string that must show up as plain text.
+ */
+export const longProfile = Object.freeze({
+    ...sampleProfile,
+    name: "Maximiliana Wolfeschlegelsteinhausenbergerdorff",
+    title: "Principal Semantic Accessibility Engineer & Esports Team Captain",
+    role: "<b>Staff</b> Front-end Platform Engineer, Design Systems",
+    experience: "12 years across agencies, product teams and open source",
+    location: "Llanfairpwllgwyngyllgogerychwyrndrobwllllantysiliogogogoch, Wales",
+    mainGame: "StarCraft II: Legacy of the Void (Grandmaster, Europe server)",
+    skills: Object.freeze([
+        ...sampleProfile.skills,
+        Object.freeze({ id: "a11y-long", name: "WebContentAccessibilityGuidelinesConformanceTesting", level: "Advanced" }),
+        Object.freeze({ id: "ts", name: "TypeScript generics and conditional types", level: "Intermediate" })
+    ])
+});

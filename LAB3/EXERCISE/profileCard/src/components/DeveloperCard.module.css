@@ -40,7 +40,8 @@
     --font-body: system-ui, "Segoe UI", Roboto, sans-serif;
     --font-mono: "Cascadia Code", "JetBrains Mono", Consolas, monospace;
     --font-size-small: .875rem;
-    --font-size-name: 1.5rem;
+    /* Scales with the card's width (cqi resolves where it is used, inside the card) */
+    --font-size-name: clamp(1.25rem, 1rem + 2.5cqi, 1.5rem);
     --font-size-initials: 2rem;
 
     /* Avatar: matches the width/height attributes on the <img> */
@@ -154,14 +155,25 @@
     list-style: none;
 }
 
+/* A badge may not be wider than the list; long names wrap inside it. */
 .badge {
     display: inline-flex;
-    gap: var(--space-2);
+    flex-wrap: wrap;
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+    gap: 0 var(--space-2);
     padding: var(--space-1) var(--space-3);
     font-size: var(--font-size-small);
     background: var(--card-accent-soft);
     border: var(--border-width) solid var(--card-border);
     border-radius: var(--radius-pill);
+}
+
+.skillName,
+.skillLevel {
+    min-width: 0;
+    overflow-wrap: anywhere;
 }
 
 .skillName {
@@ -171,6 +183,15 @@
 .skillLevel {
     font-family: var(--font-mono);
     color: var(--card-accent);
+}
+
+/* Phones (375px and below): less padding, more room for content. A container
+   query cannot style the container itself, so this one is a media query. */
+
+@media (max-width: 375px) {
+    .card {
+        padding: var(--space-3);
+    }
 }
 
 /* Narrow cards: stack the header and the metadata */
