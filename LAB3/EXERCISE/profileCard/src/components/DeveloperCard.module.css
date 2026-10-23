@@ -1,26 +1,87 @@
+/*
+ * DeveloperCard — T-01C scoped styling system
+ *
+ * Every class here is local to the card (CSS Modules). Design tokens live on
+ * .card and are inherited by everything inside it, so a value is written once
+ * and reused through var(); a theme or variant only has to override tokens.
+ *
+ * Responsive through a container query on the card itself: the layout reacts
+ * to the card's own width, wherever it is placed, not to the viewport.
+ */
+
 .card {
-    width: min(100%, 420px);
-    padding: 1.5rem;
-    background: #fff;
-    border: 1px solid #d9e0e9;
-    border-radius: 12px;
-    box-shadow: 0 8px 24px rgb(24 34 48 / 8%);
+    /* Surfaces */
+    --card-background: #0f1522;
+    --card-surface: #182235;
+    --card-border: #2b3a55;
+
+    /* Text */
+    --card-text: #e8eef8;
+    --card-text-muted: #a3b1c6;
+
+    /* Accent: neon green, the gamer HUD colour */
+    --card-accent: #3ee08f;
+    --card-accent-soft: rgb(62 224 143 / 14%);
+
+    /* Spacing scale */
+    --space-1: .25rem;
+    --space-2: .5rem;
+    --space-3: 1rem;
+    --space-4: 1.5rem;
+
+    /* Shape and depth */
+    --radius-card: 14px;
+    --radius-pill: 999px;
+    --border-width: 1px;
+    --shadow-card: 0 12px 32px rgb(5 10 20 / 45%);
+    --focus-ring: 3px solid var(--card-accent);
+
+    /* Typography */
+    --font-body: system-ui, "Segoe UI", Roboto, sans-serif;
+    --font-mono: "Cascadia Code", "JetBrains Mono", Consolas, monospace;
+    --font-size-small: .875rem;
+    --font-size-name: 1.5rem;
+    --font-size-initials: 2rem;
+
+    /* Avatar: matches the width/height attributes on the <img> */
+    --avatar-size: 96px;
+
+    container-type: inline-size;
+    width: min(100%, 440px);
     box-sizing: border-box;
+    padding: var(--space-4);
+    font-family: var(--font-body);
+    color: var(--card-text);
+    background: var(--card-background);
+    border: var(--border-width) solid var(--card-border);
+    border-top: 4px solid var(--card-accent);
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow-card);
 }
+
+/* Any focusable element placed in the card (links, buttons) gets a visible ring. */
+.card :focus-visible {
+    outline: var(--focus-ring);
+    outline-offset: 2px;
+}
+
+/* Profile header and avatar */
 
 .identity {
     display: flex;
     align-items: center;
-    gap: 1rem;
+    gap: var(--space-3);
 }
 
 .avatar,
 .initials {
     flex: none;
-    width: 96px;
-    height: 96px;
+    box-sizing: border-box;
+    width: var(--avatar-size);
+    height: var(--avatar-size);
+    border: 2px solid var(--card-accent);
     border-radius: 50%;
-    background: #e8edf5;
+    background: var(--card-surface);
 }
 
 .avatar {
@@ -30,46 +91,64 @@
 .initials {
     display: grid;
     place-items: center;
-    font-size: 2rem;
+    font-family: var(--font-mono);
+    font-size: var(--font-size-initials);
     font-weight: 700;
-    color: #344054;
+    color: var(--card-accent);
 }
+
+/* Name and title hierarchy: the name leads, the title is quieter */
 
 .name {
     margin: 0;
-    font-size: 1.5rem;
+    font-size: var(--font-size-name);
+    line-height: 1.2;
+    overflow-wrap: anywhere;
 }
 
 .title {
-    margin: .25rem 0 0;
-    color: #475467;
+    margin: var(--space-1) 0 0;
+    font-family: var(--font-mono);
+    font-size: var(--font-size-small);
+    color: var(--card-accent);
 }
+
+/* Definition-list metadata: label column + value column */
 
 .metrics {
     display: grid;
     grid-template-columns: max-content 1fr;
-    gap: .5rem 1rem;
-    margin: 1.5rem 0;
+    gap: var(--space-2) var(--space-3);
+    margin: var(--space-4) 0;
+    padding: var(--space-3);
+    background: var(--card-surface);
+    border-radius: calc(var(--radius-card) / 2);
 }
 
 .metrics dt {
-    font-weight: 600;
-    color: #475467;
+    font-size: var(--font-size-small);
+    color: var(--card-text-muted);
 }
 
 .metrics dd {
     margin: 0;
+    overflow-wrap: anywhere;
 }
 
+/* Skill list and badges */
+
 .skillsHeading {
-    margin: 0 0 .75rem;
-    font-size: 1rem;
+    margin: 0 0 var(--space-2);
+    font-size: var(--font-size-small);
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--card-text-muted);
 }
 
 .skillList {
     display: flex;
     flex-wrap: wrap;
-    gap: .5rem;
+    gap: var(--space-2);
     margin: 0;
     padding: 0;
     list-style: none;
@@ -77,11 +156,12 @@
 
 .badge {
     display: inline-flex;
-    gap: .4rem;
-    padding: .3rem .7rem;
-    border: 1px solid #c7d2e2;
-    border-radius: 999px;
-    font-size: .875rem;
+    gap: var(--space-2);
+    padding: var(--space-1) var(--space-3);
+    font-size: var(--font-size-small);
+    background: var(--card-accent-soft);
+    border: var(--border-width) solid var(--card-border);
+    border-radius: var(--radius-pill);
 }
 
 .skillName {
@@ -89,5 +169,24 @@
 }
 
 .skillLevel {
-    color: #475467;
+    font-family: var(--font-mono);
+    color: var(--card-accent);
+}
+
+/* Narrow cards: stack the header and the metadata */
+
+@container (max-width: 340px) {
+    .identity {
+        flex-direction: column;
+        text-align: center;
+    }
+
+    .metrics {
+        grid-template-columns: 1fr;
+        gap: 0;
+    }
+
+    .metrics dd + dt {
+        margin-top: var(--space-2);
+    }
 }
