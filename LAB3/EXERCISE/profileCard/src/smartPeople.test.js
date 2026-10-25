@@ -8,7 +8,7 @@ const SCHEMA_KEYS = ["age", "id", "iq", "name"];
 describe("SMART_PEOPLE", () => {
     test("holds the six original records plus the author's profile", () => {
         expect(SMART_PEOPLE).toHaveLength(7);
-        expect(SMART_PEOPLE.at(-1)).toEqual({ id: "sp-7", name: "Lữ Lê Hương Giang", age: 20, iq: 134 });
+        expect(SMART_PEOPLE.at(-1)).toEqual({ id: "sp-7", name: "Lu Le Huong Giang", age: 20, iq: 134 });
     });
 
     test("every record has exactly id, name, age and iq", () => {

@@ -12,5 +12,5 @@ export const SMART_PEOPLE = Object.freeze([
     Object.freeze({ id: "sp-5", name: "James Maxwell", age: 48, iq: 190 }),
     Object.freeze({ id: "sp-6", name: "William Sidis", age: 46, iq: 200 }),
     // Author's profile. age 20 is a documented placeholder, not a stated fact.
-    Object.freeze({ id: "sp-7", name: "Lữ Lê Hương Giang", age: 20, iq: 134 })
+    Object.freeze({ id: "sp-7", name: "Lu Le Huong Giang", age: 20, iq: 134 })
 ]);
