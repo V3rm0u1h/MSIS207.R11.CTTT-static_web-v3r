@@ -3,18 +3,21 @@ import { SMART_PEOPLE } from "../smartPeople.js";
 import styles from "./ScientistDirectory.module.css";
 
 /**
- * ScientistDirectory — T-02B interactive search & derived pipeline.
+ * ScientistDirectory — T-02B search & derived pipeline, T-02C delete/reset & live status.
  *
  * State holds only the independent, editable inputs: people, query, minIq and
  * sortBy. visiblePeople is derived from them on every render (no useEffect),
  * so any input change updates the list in the same render.
+ * Delete and Reset replace the people array (functional updater / the frozen
+ * original dataset); no array or record is ever mutated.
  *
  * Semantic structure (Zero Div-Soup):
  *   <section aria-labelledby>         landmark named by its heading
  *     <h1>                            directory title
- *     <form role="search">            labelled controls, each tied by useId()
+ *     <form role="search">            labelled controls, each tied by useId(), + Reset
+ *     <output role="status">          polite live count of the visible results
  *     <ul>                            one <li> per person, keyed by person.id
- *       <li><h2/><dl>age · IQ</dl></li>
+ *       <li><h2/><dl>age · IQ</dl><button>Delete</button></li>
  */
 
 const SORT_OPTIONS = Object.freeze([
@@ -46,6 +49,17 @@ export default function ScientistDirectory() {
         }
         return b.iq - a.iq;
     });
+
+    const handleDelete = (id) => {
+        setPeople((prev) => prev.filter((person) => person.id !== id));
+    };
+
+    const handleReset = () => {
+        setPeople(SMART_PEOPLE);
+        setQuery("");
+        setMinIq(0);
+        setSortBy("iq");
+    };
 
     return (
         <section className={styles.directory} aria-labelledby={headingId}>
@@ -83,7 +97,14 @@ export default function ScientistDirectory() {
                         ))}
                     </select>
                 </p>
+                <p className={styles.actions}>
+                    <button type="button" className={styles.reset} onClick={handleReset}>Reset</button>
+                </p>
             </form>
+
+            <output className={styles.status} role="status" aria-live="polite">
+                {visiblePeople.length} {visiblePeople.length === 1 ? "person" : "people"} found
+            </output>
 
             <ul className={styles.list}>
                 {visiblePeople.map((person) => (
@@ -95,6 +116,14 @@ export default function ScientistDirectory() {
                             <dt>IQ</dt>
                             <dd>{person.iq}</dd>
                         </dl>
+                        <button
+                            type="button"
+                            className={styles.delete}
+                            aria-label={`Delete ${person.name}`}
+                            onClick={() => handleDelete(person.id)}
+                        >
+                            Delete
+                        </button>
                     </li>
                 ))}
             </ul>
