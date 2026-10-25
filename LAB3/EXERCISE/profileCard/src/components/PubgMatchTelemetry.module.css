@@ -108,34 +108,175 @@
     outline-offset: 2px;
 }
 
-.feed {
+/* --- LOADING: blue-zone skeleton (T-03C) ------------------------------- */
+
+.skeleton {
+    box-sizing: border-box;
+    min-height: 220px;
     display: grid;
-    gap: var(--space-2);
+    align-content: start;
+    gap: var(--space-3);
     margin: 0;
     padding: var(--space-3);
-    border: 1px solid var(--tel-border);
-    border-radius: var(--radius);
-    background: var(--tel-surface);
+    border: 1px solid #2563eb;
+    border-radius: .75rem;
+    background: linear-gradient(110deg, #101b35 25%, #1d4ed8 45%, #101b35 65%);
+    background-size: 200% 100%;
+    animation: blueZonePulse 1.5s ease-in-out infinite;
+}
+
+.skeletonHeader {
+    display: grid;
+    gap: var(--space-2);
+}
+
+.skeletonHeader .bone:first-child {
+    width: 60%;
+    height: 1.5rem;
+}
+
+.skeletonHeader .bone:last-child {
+    width: 35%;
+}
+
+.skeletonStats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
+    gap: var(--space-3);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.skeletonStats li {
+    display: grid;
+    gap: var(--space-2);
+}
+
+.skeletonStats .bone:last-child {
+    width: 50%;
+    height: 1.75rem;
+}
+
+.bone {
+    display: block;
+    height: 1rem;
+    border-radius: 4px;
+    background: rgb(147 197 253 / .35);
+}
+
+@keyframes blueZonePulse {
+    0%, 100% {
+        opacity: .65;
+    }
+
+    50% {
+        opacity: 1;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .skeleton {
+        animation: none;
+    }
+}
+
+/* --- SUCCESS: telemetry dashboard (T-03C) ------------------------------- */
+
+.dashboard {
+    --zone-blue: #60a5fa;
+    --zone-text: #e6edf8;
+    --zone-muted: #9fb3d1;
+
+    box-sizing: border-box;
+    min-height: 220px;
+    display: grid;
+    align-content: start;
+    gap: var(--space-3);
+    margin: 0;
+    padding: var(--space-3);
+    border: 1px solid #2563eb;
+    border-radius: .75rem;
+    background: #101b35;
+    color: var(--zone-text);
+}
+
+.dashboardHeader {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--space-1) var(--space-3);
+}
+
+.squadName {
+    flex: 1 1 100%;
+    margin: 0;
+    font-size: 1.35rem;
+    overflow-wrap: anywhere;
+}
+
+.map {
+    margin: 0;
+    color: var(--zone-muted);
+}
+
+.map strong {
+    color: var(--zone-text);
+}
+
+.badge {
+    margin: 0;
+    padding: 0 var(--space-2);
+    border: 1px solid #f59e0b;
+    border-radius: 999px;
+    color: #fbbf24;
+    font-size: .75rem;
+    font-weight: 700;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+}
+
+/* Label / value rows on mobile; two pairs per row when there is room. */
+.stats {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    align-items: baseline;
+    gap: var(--space-2) var(--space-3);
+    margin: 0;
+}
+
+@media (min-width: 36rem) {
+    .stats {
+        grid-template-columns: repeat(2, max-content 1fr);
+    }
+}
+
+.stats dt {
+    color: var(--zone-muted);
+}
+
+.stats dd {
+    margin: 0;
+    font-size: 1.25rem;
+    font-variant-numeric: tabular-nums;
+    font-weight: 700;
+}
+
+.stats .zoneShrinking {
+    color: var(--zone-blue);
+}
+
+.stats .zoneHolding {
+    color: var(--zone-text);
 }
 
 .disclaimer {
-    color: var(--tel-text-muted);
+    padding-top: var(--space-2);
+    border-top: 1px solid rgb(159 179 209 / .3);
+    color: var(--zone-muted);
     font-size: .875rem;
 }
 
-.telemetry {
-    display: grid;
-    grid-template-columns: auto 1fr;
-    gap: var(--space-1) var(--space-3);
+.disclaimer p {
     margin: 0;
-}
-
-.telemetry dt {
-    color: var(--tel-text-muted);
-}
-
-.telemetry dd {
-    margin: 0;
-    font-variant-numeric: tabular-nums;
-    font-weight: 600;
 }

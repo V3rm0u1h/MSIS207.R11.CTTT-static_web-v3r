@@ -5,7 +5,8 @@ import styles from "./PubgMatchTelemetry.module.css";
 export { SQUADS };
 
 /**
- * PubgMatchTelemetry — T-03A telemetry architecture, T-03B async pipeline & cancellation.
+ * PubgMatchTelemetry — T-03A telemetry architecture, T-03B async pipeline & cancellation,
+ * T-03C loading skeleton & success dashboard.
  *
  * The request lifecycle is a four-state machine (STATUS). telemetry and error
  * are kept apart from status: status says where we are, telemetry/error hold
@@ -26,7 +27,12 @@ export { SQUADS };
  *     <form>                          labelled squad <select> + request <button>
  *     <output role="status">          polite live text for the current status
  *     <p role="alert"> + Retry        error message slot (ERROR only)
- *     <figure><dl/><figcaption/>      telemetry data slot (SUCCESS only), labelled simulated
+ *     <article aria-hidden>           220px pulsing blue-zone skeleton (LOADING only, decorative:
+ *                                     the status output already announces loading)
+ *     <article aria-labelledby>       telemetry dashboard (SUCCESS only)
+ *       <header><h2/><p>map</p><p>SIMULATED badge</p></header>
+ *       <dl>                          alive · eliminations · placement · zone
+ *       <footer>                      "not official live PVS match data" notice
  */
 
 export const STATUS = Object.freeze({
@@ -43,6 +49,8 @@ const STATUS_TEXT = Object.freeze({
     [STATUS.ERROR]: "Telemetry unavailable."
 });
 
+const STAT_LABELS = Object.freeze(["Alive players", "Eliminations", "Placement", "Zone status"]);
+
 export default function PubgMatchTelemetry() {
     const [squad, setSquad] = useState("CES");
     const [status, setStatus] = useState(STATUS.IDLE);
@@ -52,6 +60,7 @@ export default function PubgMatchTelemetry() {
 
     const headingId = useId();
     const squadId = useId();
+    const dashboardHeadingId = useId();
 
     const selectedSquad = SQUADS.find((entry) => entry.id === squad);
 
@@ -127,26 +136,46 @@ export default function PubgMatchTelemetry() {
                 </p>
             )}
 
+            {status === STATUS.LOADING && (
+                <article className={styles.skeleton} aria-hidden="true">
+                    <header className={styles.skeletonHeader}>
+                        <span className={styles.bone} />
+                        <span className={styles.bone} />
+                    </header>
+                    <ul className={styles.skeletonStats}>
+                        {STAT_LABELS.map((label) => (
+                            <li key={label}>
+                                <span className={styles.bone} />
+                                <span className={styles.bone} />
+                            </li>
+                        ))}
+                    </ul>
+                </article>
+            )}
+
             {status === STATUS.SUCCESS && telemetry !== null && telemetry.squadId === squad && (
-                <figure className={styles.feed}>
-                    <dl className={styles.telemetry} aria-label={`${telemetry.squadName} telemetry`}>
-                        <dt>Squad</dt>
-                        <dd>{telemetry.squadName}</dd>
-                        <dt>Map</dt>
-                        <dd>{telemetry.map}</dd>
-                        <dt>Alive players</dt>
+                <article className={styles.dashboard} aria-labelledby={dashboardHeadingId}>
+                    <header className={styles.dashboardHeader}>
+                        <h2 id={dashboardHeadingId} className={styles.squadName}>{telemetry.squadName}</h2>
+                        <p className={styles.map}>Map: <strong>{telemetry.map}</strong></p>
+                        <p className={styles.badge}>Simulated</p>
+                    </header>
+                    <dl className={styles.stats}>
+                        <dt>{STAT_LABELS[0]}</dt>
                         <dd>{telemetry.alivePlayers} / 4</dd>
-                        <dt>Kills</dt>
+                        <dt>{STAT_LABELS[1]}</dt>
                         <dd>{telemetry.kills}</dd>
-                        <dt>Placement</dt>
+                        <dt>{STAT_LABELS[2]}</dt>
                         <dd>#{telemetry.placement}</dd>
-                        <dt>Blue Zone</dt>
-                        <dd>Phase {telemetry.blueZonePhase} · {telemetry.blueZoneShrinking ? "Shrinking" : "Holding"}</dd>
+                        <dt>{STAT_LABELS[3]}</dt>
+                        <dd className={telemetry.blueZoneShrinking ? styles.zoneShrinking : styles.zoneHolding}>
+                            Phase {telemetry.blueZonePhase} · {telemetry.blueZoneShrinking ? "Shrinking" : "Holding"}
+                        </dd>
                     </dl>
-                    <figcaption className={styles.disclaimer}>
-                        Simulated telemetry for demonstration only — not official live PVS match data.
-                    </figcaption>
-                </figure>
+                    <footer className={styles.disclaimer}>
+                        <p>Simulated telemetry for demonstration only — not official live PVS match data.</p>
+                    </footer>
+                </article>
             )}
         </section>
     );

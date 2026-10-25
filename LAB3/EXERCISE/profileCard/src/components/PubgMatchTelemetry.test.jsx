@@ -1,9 +1,15 @@
 import { StrictMode } from "react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import SOURCE from "./PubgMatchTelemetry.jsx?raw";
+import styles from "./PubgMatchTelemetry.module.css";
 import PubgMatchTelemetry, { SQUADS, STATUS } from "./PubgMatchTelemetry.jsx";
 import { PACKET_TIMEOUT_MESSAGE, SIMULATED_LATENCY_MS, requestTelemetry } from "../pubgTelemetry.js";
+
+// Read from disk: with CSS Modules on, a ?raw import of a .css file is not plain text.
+const CSS = readFileSync(join(process.cwd(), "src/components/PubgMatchTelemetry.module.css"), "utf8");
 
 // Pass-through spy: the real simulated feed runs unless a test overrides one call.
 vi.mock("../pubgTelemetry.js", async (importOriginal) => {
@@ -13,11 +19,14 @@ vi.mock("../pubgTelemetry.js", async (importOriginal) => {
 
 // T-03A — Telemetry architecture: squad data & four-state machine.
 // T-03B — Async pipeline: packet loss, AbortController cancellation, retry.
+// T-03C — Loading skeleton & success dashboard.
 
 const squadSelect = () => screen.getByLabelText("Squad");
 const requestButton = () => screen.getByRole("button", { name: "Request telemetry" });
 const statusOutput = () => screen.getByRole("status");
-const shownSquad = () => screen.getByText("Squad", { selector: "dt" }).nextElementSibling.textContent;
+const dashboard = () => screen.getByRole("article");
+const shownSquad = () => within(dashboard()).getByRole("heading", { level: 2 }).textContent;
+const skeleton = (container) => container.querySelector(`.${styles.skeleton}`);
 
 /** Math.random() returns 0.5 (success) or 0.1 (packet loss) from now on. */
 const succeed = () => vi.spyOn(Math, "random").mockReturnValue(0.5);
@@ -207,6 +216,67 @@ describe("PubgMatchTelemetry — async pipeline (T-03B)", () => {
         await finishRequest();
         expect(statusOutput().dataset.status).toBe(STATUS.SUCCESS);
         expect(screen.queryByRole("alert")).toBeNull();
+    });
+});
+
+describe("PubgMatchTelemetry — loading experience (T-03C)", () => {
+    test("a decorative skeleton shows only while LOADING, and never alongside the old squad's data", async () => {
+        succeed();
+        const { container } = render(<PubgMatchTelemetry />);
+        expect(skeleton(container)).toBeNull();
+
+        fireEvent.click(requestButton());
+        expect(skeleton(container)).not.toBeNull();
+        expect(skeleton(container).getAttribute("aria-hidden")).toBe("true");
+        expect(skeleton(container).querySelectorAll(`.${styles.bone}`).length).toBe(10);
+
+        await finishRequest();
+        expect(skeleton(container)).toBeNull();
+        expect(shownSquad()).toBe("Cerberus Esports");
+
+        fireEvent.change(squadSelect(), { target: { value: "TE" } });
+        expect(skeleton(container)).not.toBeNull();
+        expect(screen.queryByRole("article")).toBeNull();
+        expect(screen.queryByText("Cerberus Esports", { selector: "h2" })).toBeNull();
+    });
+
+    test("skeleton CSS: ~220px, blue-zone gradient, pulsing, and still under reduced motion", () => {
+        const rule = CSS.match(/\.skeleton \{([^}]*)\}/)[1];
+        expect(rule).toMatch(/min-height: 220px;/);
+        expect(rule).toMatch(/linear-gradient\(110deg, #101b35 25%, #1d4ed8 45%, #101b35 65%\)/);
+        expect(rule).toMatch(/animation: blueZonePulse 1\.5s ease-in-out infinite;/);
+        expect(CSS).toMatch(/@keyframes blueZonePulse/);
+        expect(CSS).toMatch(/@media \(prefers-reduced-motion: reduce\) \{\s*\.skeleton \{\s*animation: none;/);
+    });
+
+    test("the dashboard keeps the skeleton's height so the layout does not jump", () => {
+        const rule = CSS.match(/\.dashboard \{([^}]*)\}/)[1];
+        expect(rule).toMatch(/min-height: 220px;/);
+    });
+
+    test("SUCCESS renders an article dashboard: header with squad & map, stats, simulated notice", async () => {
+        succeed();
+        render(<PubgMatchTelemetry />);
+        fireEvent.click(requestButton());
+        await finishRequest();
+
+        const article = screen.getByRole("article", { name: "Cerberus Esports" });
+        const header = article.querySelector("header");
+        expect(within(header).getByRole("heading", { level: 2 }).textContent).toBe("Cerberus Esports");
+        expect(header.textContent).toContain("Map: Miramar");
+        expect(within(header).getByText("Simulated")).toBeTruthy();
+
+        const terms = within(article).getAllByRole("term").map((term) => term.textContent);
+        const values = within(article).getAllByRole("definition").map((value) => value.textContent.trim());
+        expect(terms).toEqual(["Alive players", "Eliminations", "Placement", "Zone status"]);
+        expect(values).toEqual(["2 / 4", "8", "#9", "Phase 5 · Holding"]);
+
+        expect(article.querySelector("footer").textContent).toMatch(/not official live PVS match data/);
+    });
+
+    test("the stats grid stacks on narrow screens and pairs up on wider ones", () => {
+        expect(CSS).toMatch(/\.stats \{[^}]*grid-template-columns: max-content 1fr;/);
+        expect(CSS).toMatch(/@media \(min-width: 36rem\) \{\s*\.stats \{\s*grid-template-columns: repeat\(2, max-content 1fr\);/);
     });
 });
 
