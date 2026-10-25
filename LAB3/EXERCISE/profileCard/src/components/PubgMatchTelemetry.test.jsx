@@ -20,6 +20,7 @@ vi.mock("../pubgTelemetry.js", async (importOriginal) => {
 // T-03A — Telemetry architecture: squad data & four-state machine.
 // T-03B — Async pipeline: packet loss, AbortController cancellation, retry.
 // T-03C — Loading skeleton & success dashboard.
+// T-03D — Accessible error alert, retry & mutually exclusive panels.
 
 const squadSelect = () => screen.getByLabelText("Squad");
 const requestButton = () => screen.getByRole("button", { name: "Request telemetry" });
@@ -40,6 +41,7 @@ async function finishRequest() {
 
 beforeEach(() => {
     vi.useFakeTimers();
+    requestTelemetry.mockClear();
 });
 
 afterEach(() => {
@@ -122,7 +124,7 @@ describe("PubgMatchTelemetry — async pipeline (T-03B)", () => {
         expect(requestButton().disabled).toBe(false);
     });
 
-    test("packet loss shows the timeout in an alert with a Retry button", async () => {
+    test("packet loss shows the timeout in an alert with a Reconnect button", async () => {
         loseNextPackets();
         render(<PubgMatchTelemetry />);
         fireEvent.click(requestButton());
@@ -141,7 +143,7 @@ describe("PubgMatchTelemetry — async pipeline (T-03B)", () => {
         expect(statusOutput().dataset.status).toBe(STATUS.ERROR);
 
         random.mockReturnValue(0.5);
-        fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+        fireEvent.click(screen.getByRole("button", { name: "Reconnect Telemetry" }));
         expect(statusOutput().dataset.status).toBe(STATUS.LOADING);
         expect(screen.queryByRole("alert")).toBeNull();
         expect(vi.getTimerCount()).toBe(1);
@@ -277,6 +279,114 @@ describe("PubgMatchTelemetry — loading experience (T-03C)", () => {
     test("the stats grid stacks on narrow screens and pairs up on wider ones", () => {
         expect(CSS).toMatch(/\.stats \{[^}]*grid-template-columns: max-content 1fr;/);
         expect(CSS).toMatch(/@media \(min-width: 36rem\) \{\s*\.stats \{\s*grid-template-columns: repeat\(2, max-content 1fr\);/);
+    });
+});
+
+describe("PubgMatchTelemetry — error recovery (T-03D)", () => {
+    const reconnectButton = () => screen.getByRole("button", { name: "Reconnect Telemetry" });
+
+    /** Which of the four panels are on screen right now. */
+    function visiblePanels(container) {
+        return {
+            prompt: screen.queryByText(/to connect the radar/) !== null,
+            skeleton: skeleton(container) !== null,
+            dashboard: screen.queryByRole("article") !== null,
+            alert: screen.queryByRole("alert") !== null
+        };
+    }
+    const only = (panel) => ({ prompt: false, skeleton: false, dashboard: false, alert: false, [panel]: true });
+
+    test("exactly one panel per state: IDLE prompt, LOADING skeleton, ERROR alert, SUCCESS dashboard", async () => {
+        const random = loseNextPackets();
+        const { container } = render(<PubgMatchTelemetry />);
+        expect(visiblePanels(container)).toEqual(only("prompt"));
+
+        fireEvent.click(requestButton());
+        expect(visiblePanels(container)).toEqual(only("skeleton"));
+
+        await finishRequest();
+        expect(visiblePanels(container)).toEqual(only("alert"));
+
+        random.mockReturnValue(0.5);
+        fireEvent.click(reconnectButton());
+        expect(visiblePanels(container)).toEqual(only("skeleton"));
+
+        await finishRequest();
+        expect(visiblePanels(container)).toEqual(only("dashboard"));
+    });
+
+    test("the error is an inline <section role=alert> named by its heading, with the packet message", async () => {
+        loseNextPackets();
+        render(<PubgMatchTelemetry />);
+        fireEvent.click(requestButton());
+        await finishRequest();
+
+        const alert = screen.getByRole("alert", { name: "Satellite Connection Lost" });
+        expect(alert.tagName).toBe("SECTION");
+        expect(within(alert).getByRole("heading", { level: 2 }).textContent).toBe("Satellite Connection Lost");
+        expect(within(alert).getByText(PACKET_TIMEOUT_MESSAGE).tagName).toBe("P");
+        expect(within(alert).getByRole("button", { name: "Reconnect Telemetry" }).type).toBe("button");
+    });
+
+    test("never calls window.alert", async () => {
+        const alertSpy = vi.spyOn(window, "alert").mockImplementation(() => {});
+        loseNextPackets();
+        render(<PubgMatchTelemetry />);
+        fireEvent.click(requestButton());
+        await finishRequest();
+        fireEvent.click(reconnectButton());
+        await finishRequest();
+
+        expect(alertSpy).not.toHaveBeenCalled();
+        expect(SOURCE).not.toMatch(/\balert\s*\(/);
+    });
+
+    test("Reconnect clears the error, shows the skeleton and starts a fresh request for the same squad", async () => {
+        loseNextPackets();
+        const { container } = render(<PubgMatchTelemetry />);
+        fireEvent.change(squadSelect(), { target: { value: "TE" } });
+        fireEvent.click(requestButton());
+        await finishRequest();
+        requestTelemetry.mockClear(); // only count the retry's call
+
+        fireEvent.click(reconnectButton());
+        expect(statusOutput().dataset.status).toBe(STATUS.LOADING);
+        expect(screen.queryByText(PACKET_TIMEOUT_MESSAGE)).toBeNull();
+        expect(skeleton(container)).not.toBeNull();
+        expect(requestTelemetry).toHaveBeenCalledTimes(1);
+        expect(requestTelemetry.mock.calls[0][0]).toBe("TE");
+        expect(requestTelemetry.mock.calls[0][1]).toBeInstanceOf(AbortSignal);
+        expect(requestTelemetry.mock.calls[0][1].aborted).toBe(false);
+    });
+
+    test("retry is not forced to succeed: packet loss can strike again", async () => {
+        loseNextPackets();
+        render(<PubgMatchTelemetry />);
+        fireEvent.click(requestButton());
+        await finishRequest();
+
+        fireEvent.click(reconnectButton());
+        await finishRequest();
+        expect(statusOutput().dataset.status).toBe(STATUS.ERROR);
+        expect(screen.getByRole("alert").textContent).toContain(PACKET_TIMEOUT_MESSAGE);
+    });
+
+    test("rapid switching across all three squads: every old request is aborted, no false error, latest squad wins", async () => {
+        succeed();
+        render(<PubgMatchTelemetry />);
+        fireEvent.click(requestButton());
+        for (const id of ["TE", "GE", "CES", "TE", "GE"]) {
+            fireEvent.change(squadSelect(), { target: { value: id } });
+        }
+        const signals = requestTelemetry.mock.calls.map((call) => call[1]);
+        expect(signals.slice(0, -1).every((signal) => signal.aborted)).toBe(true);
+        expect(signals.at(-1).aborted).toBe(false);
+        expect(screen.queryByRole("alert")).toBeNull();
+
+        await finishRequest();
+        expect(screen.queryByRole("alert")).toBeNull();
+        expect(screen.getAllByRole("article")).toHaveLength(1);
+        expect(shownSquad()).toBe("Genius Esports");
     });
 });
 

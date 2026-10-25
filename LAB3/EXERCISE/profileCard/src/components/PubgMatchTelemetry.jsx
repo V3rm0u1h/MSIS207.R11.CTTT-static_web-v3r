@@ -6,7 +6,7 @@ export { SQUADS };
 
 /**
  * PubgMatchTelemetry — T-03A telemetry architecture, T-03B async pipeline & cancellation,
- * T-03C loading skeleton & success dashboard.
+ * T-03C loading skeleton & success dashboard, T-03D accessible error & retry.
  *
  * The request lifecycle is a four-state machine (STATUS). telemetry and error
  * are kept apart from status: status says where we are, telemetry/error hold
@@ -19,16 +19,24 @@ export { SQUADS };
  *   - after the await, an aborted run returns before touching state, so an old
  *     response can never overwrite the newer squad's telemetry.
  * The radar stays IDLE until the first request (retryTick === 0); after that,
- * changing squad fetches straight away.
+ * changing squad fetches straight away. "Reconnect Telemetry" only bumps
+ * retryTick: the effect re-runs, clears the error, goes LOADING and starts a
+ * fresh abortable request, still subject to the 35% packet loss.
+ * Errors render inline (role="alert"); the blocking browser alert dialog is never used.
+ *
+ * renderPanel() switches on status, so exactly one panel is on screen:
+ *   IDLE → connection prompt · LOADING → skeleton · SUCCESS → dashboard · ERROR → alert.
  *
  * Semantic structure (Zero Div-Soup):
  *   <section aria-labelledby>         landmark named by its heading
  *     <h1>                            radar title
  *     <form>                          labelled squad <select> + request <button>
  *     <output role="status">          polite live text for the current status
- *     <p role="alert"> + Retry        error message slot (ERROR only)
+ *     <p>                             connection prompt (IDLE only)
  *     <article aria-hidden>           220px pulsing blue-zone skeleton (LOADING only, decorative:
  *                                     the status output already announces loading)
+ *     <section role="alert" aria-labelledby>   (ERROR only)
+ *       <h2>Satellite Connection Lost</h2><p>{error}</p><button>Reconnect Telemetry</button>
  *     <article aria-labelledby>       telemetry dashboard (SUCCESS only)
  *       <header><h2/><p>map</p><p>SIMULATED badge</p></header>
  *       <dl>                          alive · eliminations · placement · zone
@@ -43,7 +51,7 @@ export const STATUS = Object.freeze({
 });
 
 const STATUS_TEXT = Object.freeze({
-    [STATUS.IDLE]: "Idle. Request telemetry to start the radar.",
+    [STATUS.IDLE]: "Radar idle.",
     [STATUS.LOADING]: "Loading telemetry…",
     [STATUS.SUCCESS]: "Telemetry received.",
     [STATUS.ERROR]: "Telemetry unavailable."
@@ -61,6 +69,7 @@ export default function PubgMatchTelemetry() {
     const headingId = useId();
     const squadId = useId();
     const dashboardHeadingId = useId();
+    const errorHeadingId = useId();
 
     const selectedSquad = SQUADS.find((entry) => entry.id === squad);
 
@@ -96,10 +105,88 @@ export default function PubgMatchTelemetry() {
         return () => controller.abort();
     }, [squad, retryTick]);
 
+    const requestFresh = () => setRetryTick((tick) => tick + 1);
+
     const handleRequest = (event) => {
         event.preventDefault();
-        setRetryTick((prev) => prev + 1);
+        requestFresh();
     };
+
+    function renderPanel() {
+        switch (status) {
+            case STATUS.IDLE:
+                return (
+                    <p className={styles.prompt}>
+                        Choose a squad, then press <strong>Request telemetry</strong> to connect the radar.
+                    </p>
+                );
+            case STATUS.ERROR:
+                return (
+                    <section className={styles.error} role="alert" aria-labelledby={errorHeadingId}>
+                        <h2 id={errorHeadingId} className={styles.errorTitle}>Satellite Connection Lost</h2>
+                        <p>{error}</p>
+                        <button type="button" className={styles.retry} onClick={requestFresh}>
+                            Reconnect Telemetry
+                        </button>
+                    </section>
+                );
+            case STATUS.SUCCESS:
+                // Only the selected squad's data; anything else is mid-switch, so keep the skeleton.
+                if (telemetry !== null && telemetry.squadId === squad) {
+                    return renderDashboard(telemetry);
+                }
+                return renderSkeleton();
+            case STATUS.LOADING:
+            default:
+                return renderSkeleton();
+        }
+    }
+
+    function renderSkeleton() {
+        return (
+            <article className={styles.skeleton} aria-hidden="true">
+                <header className={styles.skeletonHeader}>
+                    <span className={styles.bone} />
+                    <span className={styles.bone} />
+                </header>
+                <ul className={styles.skeletonStats}>
+                    {STAT_LABELS.map((label) => (
+                        <li key={label}>
+                            <span className={styles.bone} />
+                            <span className={styles.bone} />
+                        </li>
+                    ))}
+                </ul>
+            </article>
+        );
+    }
+
+    function renderDashboard(data) {
+        return (
+            <article className={styles.dashboard} aria-labelledby={dashboardHeadingId}>
+                <header className={styles.dashboardHeader}>
+                    <h2 id={dashboardHeadingId} className={styles.squadName}>{data.squadName}</h2>
+                    <p className={styles.map}>Map: <strong>{data.map}</strong></p>
+                    <p className={styles.badge}>Simulated</p>
+                </header>
+                <dl className={styles.stats}>
+                    <dt>{STAT_LABELS[0]}</dt>
+                    <dd>{data.alivePlayers} / 4</dd>
+                    <dt>{STAT_LABELS[1]}</dt>
+                    <dd>{data.kills}</dd>
+                    <dt>{STAT_LABELS[2]}</dt>
+                    <dd>#{data.placement}</dd>
+                    <dt>{STAT_LABELS[3]}</dt>
+                    <dd className={data.blueZoneShrinking ? styles.zoneShrinking : styles.zoneHolding}>
+                        Phase {data.blueZonePhase} · {data.blueZoneShrinking ? "Shrinking" : "Holding"}
+                    </dd>
+                </dl>
+                <footer className={styles.disclaimer}>
+                    <p>Simulated telemetry for demonstration only — not official live PVS match data.</p>
+                </footer>
+            </article>
+        );
+    }
 
     return (
         <section className={styles.radar} aria-labelledby={headingId}>
@@ -127,56 +214,7 @@ export default function PubgMatchTelemetry() {
                 {selectedSquad.name}: {STATUS_TEXT[status]}
             </output>
 
-            {status === STATUS.ERROR && (
-                <p className={styles.error} role="alert">
-                    {error}{" "}
-                    <button type="button" className={styles.retry} onClick={() => setRetryTick((prev) => prev + 1)}>
-                        Retry
-                    </button>
-                </p>
-            )}
-
-            {status === STATUS.LOADING && (
-                <article className={styles.skeleton} aria-hidden="true">
-                    <header className={styles.skeletonHeader}>
-                        <span className={styles.bone} />
-                        <span className={styles.bone} />
-                    </header>
-                    <ul className={styles.skeletonStats}>
-                        {STAT_LABELS.map((label) => (
-                            <li key={label}>
-                                <span className={styles.bone} />
-                                <span className={styles.bone} />
-                            </li>
-                        ))}
-                    </ul>
-                </article>
-            )}
-
-            {status === STATUS.SUCCESS && telemetry !== null && telemetry.squadId === squad && (
-                <article className={styles.dashboard} aria-labelledby={dashboardHeadingId}>
-                    <header className={styles.dashboardHeader}>
-                        <h2 id={dashboardHeadingId} className={styles.squadName}>{telemetry.squadName}</h2>
-                        <p className={styles.map}>Map: <strong>{telemetry.map}</strong></p>
-                        <p className={styles.badge}>Simulated</p>
-                    </header>
-                    <dl className={styles.stats}>
-                        <dt>{STAT_LABELS[0]}</dt>
-                        <dd>{telemetry.alivePlayers} / 4</dd>
-                        <dt>{STAT_LABELS[1]}</dt>
-                        <dd>{telemetry.kills}</dd>
-                        <dt>{STAT_LABELS[2]}</dt>
-                        <dd>#{telemetry.placement}</dd>
-                        <dt>{STAT_LABELS[3]}</dt>
-                        <dd className={telemetry.blueZoneShrinking ? styles.zoneShrinking : styles.zoneHolding}>
-                            Phase {telemetry.blueZonePhase} · {telemetry.blueZoneShrinking ? "Shrinking" : "Holding"}
-                        </dd>
-                    </dl>
-                    <footer className={styles.disclaimer}>
-                        <p>Simulated telemetry for demonstration only — not official live PVS match data.</p>
-                    </footer>
-                </article>
-            )}
+            {renderPanel()}
         </section>
     );
 }
