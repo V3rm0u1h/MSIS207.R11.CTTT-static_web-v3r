@@ -49,7 +49,11 @@
     padding: 0 0 0.5rem;
     font: inherit;
     cursor: pointer;
+    /* No double-tap zoom, text selection or callout while playing. */
     touch-action: manipulation;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
 }
 
 .whiteKey {
@@ -69,10 +73,29 @@
     padding-bottom: 0.375rem;
 }
 
+/*
+ * Sounding keys (aria-pressed="true", live or during replay): amber fill plus
+ * a darker bottom edge, so the state is not carried by hue alone.
+ */
+.whiteKey[aria-pressed="true"] {
+    background: var(--piano-active-white);
+    box-shadow: inset 0 -0.375rem 0 var(--piano-active-black);
+}
+
+.blackKey[aria-pressed="true"] {
+    background: var(--piano-active-black);
+    box-shadow: inset 0 -0.25rem 0 var(--piano-active-white);
+}
+
+/*
+ * Two-tone focus ring: the violet outline contrasts with idle keys and the
+ * page, the light inner ring with a pressed (amber) black key.
+ */
 .whiteKey:focus-visible,
 .blackKey:focus-visible {
     outline: 3px solid var(--piano-focus);
     outline-offset: -3px;
+    box-shadow: inset 0 0 0 5px var(--piano-focus-inner);
 }
 
 .whiteSlot:focus-within {

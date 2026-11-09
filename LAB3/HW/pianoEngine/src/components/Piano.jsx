@@ -17,17 +17,30 @@
  * the DOM stays in pitch order (C, C#, D, …) while the keys line up as on a
  * real keyboard. The grid is wider than a phone, so the list scrolls
  * horizontally inside its section and the page itself never does.
+ *
+ * T-02C: keys report press / release through onNoteOn / onNoteOff, and
+ * `activeNotes` (a Set of MIDI numbers) marks the keys that are sounding.
+ * Keys are memoised, so a note change re-renders only the keys it touches.
  */
+import { memo, useMemo } from "react";
 import { assertPianoKeys, keyLabel, layoutPianoKeys } from "../piano.js";
 import PianoKey from "./PianoKey.jsx";
 import styles from "./Piano.module.css";
 
-export default function Piano({ pianoKeys, onKeyPress }) {
+const MemoPianoKey = memo(PianoKey);
+const NO_NOTES = Object.freeze(new Set());
+
+export default function Piano({ pianoKeys, activeNotes = NO_NOTES, onNoteOn, onNoteOff }) {
     assertPianoKeys(pianoKeys);
-    if (onKeyPress !== undefined && typeof onKeyPress !== "function") {
-        throw new TypeError("Piano: onKeyPress must be a function when provided");
+    if (!(activeNotes instanceof Set)) {
+        throw new TypeError("Piano: activeNotes must be a Set of MIDI numbers");
     }
-    const { placements, columns, whiteCount } = layoutPianoKeys(pianoKeys);
+    [["onNoteOn", onNoteOn], ["onNoteOff", onNoteOff]].forEach(([name, handler]) => {
+        if (handler !== undefined && typeof handler !== "function") {
+            throw new TypeError(`Piano: ${name} must be a function when provided`);
+        }
+    });
+    const { placements, columns, whiteCount } = useMemo(() => layoutPianoKeys(pianoKeys), [pianoKeys]);
     const first = pianoKeys[0];
     const last = pianoKeys[pianoKeys.length - 1];
 
@@ -44,9 +57,11 @@ export default function Piano({ pianoKeys, onKeyPress }) {
                         className={pianoKey.type === "black" ? styles.blackSlot : styles.whiteSlot}
                         style={{ gridColumn: `${placements[index].column} / span ${placements[index].span}` }}
                     >
-                        <PianoKey
+                        <MemoPianoKey
                             pianoKey={pianoKey}
-                            onPress={onKeyPress}
+                            pressed={activeNotes.has(pianoKey.midi)}
+                            onNoteOn={onNoteOn}
+                            onNoteOff={onNoteOff}
                             className={pianoKey.type === "black" ? styles.blackKey : styles.whiteKey}
                             labelClassName={styles.label}
                             hintClassName={styles.srOnly}

@@ -3,7 +3,8 @@ import { describe, expect, test } from "vitest";
 import INDEX_HTML from "../index.html?raw";
 
 // Read as text: the Vitest CSS-Modules setting turns `?raw` imports of *.module.css into class maps.
-const STYLES = readFileSync("src/components/Piano.module.css", "utf8");
+const STYLES = readFileSync("src/components/Piano.module.css", "utf8")
+    + readFileSync("src/components/RecorderControls.module.css", "utf8");
 
 // T-02A — key colours meet WCAG 2.2 AA (1.4.3 text, 1.4.11 non-text), computed from the real tokens.
 
@@ -33,14 +34,18 @@ describe("design tokens", () => {
     test("the stylesheet uses tokens, not hard-coded colours", () => {
         const code = STYLES.replace(/\/\*[\s\S]*?\*\//g, "");
         expect(code).not.toMatch(/#[0-9a-f]{3,8}\b/i);
-        ["white-key", "black-key", "focus", "key-border"].forEach((token) => expect(code).toContain(`var(--piano-${token})`));
+        ["white-key", "black-key", "focus", "focus-inner", "key-border", "active-white", "active-black", "control", "recording"].forEach((token) => expect(code).toContain(`var(--piano-${token})`));
     });
 
     test.each([
         ["page text", "text", "background"],
         ["muted text", "muted", "background"],
         ["white-key label", "white-text", "white-key"],
-        ["black-key label", "black-text", "black-key"]
+        ["black-key label", "black-text", "black-key"],
+        ["pressed white-key label", "white-text", "active-white"],
+        ["pressed black-key label", "black-text", "active-black"],
+        ["control label", "text", "control"],
+        ["unavailable control label", "muted", "background"]
     ])("1.4.3: %s is at least 4.5:1", (_, fg, bg) => {
         expect(contrast(T[fg], T[bg])).toBeGreaterThanOrEqual(4.5);
     });
@@ -51,7 +56,12 @@ describe("design tokens", () => {
         ["black key against the white keys", "black-key", "white-key"],
         ["focus ring on a white key", "focus", "white-key"],
         ["focus ring on a black key", "focus", "black-key"],
-        ["focus ring on the page", "focus", "background"]
+        ["focus ring on the page", "focus", "background"],
+        ["focus ring on a pressed white key", "focus", "active-white"],
+        ["inner focus ring on a pressed black key", "focus-inner", "active-black"],
+        ["pressed black key against the white keys", "active-black", "white-key"],
+        ["control border on the page", "key-border", "background"],
+        ["recording marker on a control", "recording", "control"]
     ])("1.4.11: %s is at least 3:1", (_, fg, bg) => {
         expect(contrast(T[fg], T[bg])).toBeGreaterThanOrEqual(3);
     });

@@ -1,0 +1,133 @@
+/* Polyphonic Piano Engine — recorder styles (T-02C). Colours come from the --piano-* tokens. */
+
+.recorder {
+    margin-top: 1.5rem;
+    min-width: 0;
+}
+
+.title {
+    margin: 0 0 0.75rem;
+    font-size: 1.125rem;
+}
+
+.actions {
+    list-style: none;
+    margin: 0 0 1rem;
+    padding: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.action {
+    min-height: 2.75rem;
+    padding: 0.5rem 1rem;
+    font: inherit;
+    font-weight: 600;
+    color: var(--piano-text);
+    background: var(--piano-control);
+    border: 1px solid var(--piano-key-border);
+    border-radius: 0.5rem;
+    cursor: pointer;
+}
+
+.action[data-recording="true"] {
+    border-color: var(--piano-recording);
+    box-shadow: inset 0 0 0 2px var(--piano-recording);
+}
+
+.action[aria-disabled="true"] {
+    color: var(--piano-muted);
+    background: var(--piano-background);
+    border-style: dashed;
+    cursor: not-allowed;
+}
+
+.action:focus-visible,
+.speed:focus-within {
+    outline: 3px solid var(--piano-focus);
+    outline-offset: 2px;
+}
+
+.speeds {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1.25rem;
+    margin: 0 0 1rem;
+    padding: 0.5rem 1rem 0.75rem;
+    border: 1px solid var(--piano-key-border);
+    border-radius: 0.5rem;
+}
+
+.speeds legend {
+    padding: 0 0.25rem;
+    color: var(--piano-muted);
+}
+
+.speed {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    min-height: 2.75rem;
+    padding: 0 0.25rem;
+    border-radius: 0.25rem;
+    cursor: pointer;
+}
+
+.speed input {
+    width: 1.25rem;
+    height: 1.25rem;
+    margin: 0;
+    accent-color: var(--piano-focus);
+}
+
+.speed input:focus-visible {
+    outline: none;
+}
+
+.status {
+    display: block;
+    margin: 0 0 0.75rem;
+    font-weight: 600;
+}
+
+.note {
+    margin: 0;
+    color: var(--piano-muted);
+}
+
+/* Scroll frame: focusable (tabindex="0"), so keyboard users can scroll a wide table too. */
+.tableFrame {
+    margin: 0;
+    max-width: 100%;
+    overflow-x: auto;
+    border-radius: 0.25rem;
+}
+
+.tableFrame:focus-visible {
+    outline: 3px solid var(--piano-focus);
+    outline-offset: 2px;
+}
+
+.table {
+    border-collapse: collapse;
+    font-variant-numeric: tabular-nums;
+}
+
+.table caption {
+    text-align: start;
+    padding-bottom: 0.5rem;
+    color: var(--piano-muted);
+}
+
+.table th,
+.table td {
+    padding: 0.375rem 0.75rem;
+    text-align: end;
+    white-space: nowrap;
+    border-bottom: 1px solid var(--piano-key-border);
+}
+
+.table thead th {
+    color: var(--piano-muted);
+}

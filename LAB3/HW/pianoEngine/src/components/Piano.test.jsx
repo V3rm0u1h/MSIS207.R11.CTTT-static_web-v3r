@@ -82,19 +82,62 @@ describe("Piano", () => {
         expect(screen.getAllByRole("button")).toHaveLength(13);
     });
 
-    test("forwards a click on a key to onKeyPress with that key's metadata", () => {
-        const onKeyPress = vi.fn();
-        renderInMain(<Piano pianoKeys={PIANO_KEYS} onKeyPress={onKeyPress} />);
-        fireEvent.click(screen.getByRole("button", { name: "A4 white key" }));
-        expect(onKeyPress).toHaveBeenCalledWith(PIANO_KEYS[48]);
+    test("pointer down / up on a key reports note-on / note-off with that key's metadata", () => {
+        const onNoteOn = vi.fn();
+        const onNoteOff = vi.fn();
+        renderInMain(<Piano pianoKeys={PIANO_KEYS} onNoteOn={onNoteOn} onNoteOff={onNoteOff} />);
+        const a4 = screen.getByRole("button", { name: "A4 white key" });
+        fireEvent.pointerDown(a4, { pointerType: "mouse", button: 0 });
+        expect(onNoteOn).toHaveBeenCalledWith(PIANO_KEYS[48]);
         expect(PIANO_KEYS[48]).toMatchObject({ midi: 69, freqHz: 440 });
+        fireEvent.pointerUp(a4, { pointerType: "mouse", button: 0 });
+        expect(onNoteOff).toHaveBeenCalledWith(PIANO_KEYS[48]);
+    });
+
+    test("a right-click does not play; leaving or cancelling a press ends the note", () => {
+        const onNoteOn = vi.fn();
+        const onNoteOff = vi.fn();
+        renderInMain(<Piano pianoKeys={PIANO_KEYS} onNoteOn={onNoteOn} onNoteOff={onNoteOff} />);
+        const c4 = screen.getByRole("button", { name: "C4 white key" });
+        fireEvent.pointerDown(c4, { pointerType: "mouse", button: 2 });
+        expect(onNoteOn).not.toHaveBeenCalled();
+        fireEvent.pointerDown(c4, { pointerType: "touch", button: 0 });
+        fireEvent.pointerCancel(c4);
+        fireEvent.pointerLeave(c4);
+        expect(onNoteOn).toHaveBeenCalledTimes(1);
+        expect(onNoteOff).toHaveBeenCalledTimes(2);
+    });
+
+    test("Enter or Space held on a focused key plays it; auto-repeat is ignored; blur releases", () => {
+        const onNoteOn = vi.fn();
+        const onNoteOff = vi.fn();
+        renderInMain(<Piano pianoKeys={PIANO_KEYS} onNoteOn={onNoteOn} onNoteOff={onNoteOff} />);
+        const key = screen.getByRole("button", { name: "C#4 black key" });
+        fireEvent.keyDown(key, { key: " " });
+        fireEvent.keyDown(key, { key: " ", repeat: true });
+        fireEvent.keyUp(key, { key: " " });
+        fireEvent.keyDown(key, { key: "Enter" });
+        fireEvent.blur(key);
+        fireEvent.keyDown(key, { key: "a" });
+        expect(onNoteOn).toHaveBeenCalledTimes(2);
+        expect(onNoteOff).toHaveBeenCalledTimes(2);
+        expect(onNoteOn).toHaveBeenLastCalledWith(PIANO_KEYS[40]);
+    });
+
+    test("activeNotes marks exactly the sounding keys as pressed", () => {
+        const { container } = renderInMain(<Piano pianoKeys={PIANO_KEYS} activeNotes={new Set([60, 64, 67])} />);
+        const pressed = [...container.querySelectorAll("button[aria-pressed='true']")].map((b) => Number(b.dataset.midi));
+        expect(pressed).toEqual([60, 64, 67]);
+        expect(container.querySelectorAll("button[aria-pressed='false']")).toHaveLength(85);
     });
 
     test.each([
         ["no keys", { pianoKeys: undefined }],
         ["an empty list", { pianoKeys: [] }],
         ["a forged key", { pianoKeys: [{ ...createPianoKey(60), note: "D" }] }],
-        ["a non-function onKeyPress", { pianoKeys: PIANO_KEYS, onKeyPress: "play" }]
+        ["a non-function onNoteOn", { pianoKeys: PIANO_KEYS, onNoteOn: "play" }],
+        ["a non-function onNoteOff", { pianoKeys: PIANO_KEYS, onNoteOff: 1 }],
+        ["activeNotes given as an array", { pianoKeys: PIANO_KEYS, activeNotes: [60] }]
     ])("throws a TypeError for %s (Rule 2)", (_, props) => {
         vi.spyOn(console, "error").mockImplementation(() => {});
         expect(() => renderInMain(<Piano {...props} />)).toThrow(TypeError);
@@ -105,6 +148,7 @@ describe("PianoKey", () => {
     test("is a single native button with no wrapper (Rules 1 and 4)", () => {
         const { container } = render(<PianoKey pianoKey={createPianoKey(61)} />);
         expect(container.children).toHaveLength(1);
+        expect(container.firstElementChild.getAttribute("aria-pressed")).toBe("false");
         const button = container.firstElementChild;
         expect(button.tagName).toBe("BUTTON");
         expect(button.type).toBe("button");
@@ -127,15 +171,15 @@ describe("Project Rules in source", () => {
 
     test("the 88 keys are generated with .map, not written out", () => {
         expect(code(PIANO_SOURCE)).toMatch(/pianoKeys\.map\(/);
-        expect((code(PIANO_SOURCE).match(/<PianoKey\b/g) ?? [])).toHaveLength(1);
+        expect((code(PIANO_SOURCE).match(/<(Memo)?PianoKey\b/g) ?? [])).toHaveLength(1);
     });
 });
 
 describe("App", () => {
-    test("renders a header and the 88-key piano, with no wrapper element", () => {
+    test("renders a header, the 88-key piano and the recorder, with no wrapper element", () => {
         const { container } = renderInMain(<App />);
-        expect([...container.children].map((node) => node.tagName)).toEqual(["HEADER", "SECTION"]);
+        expect([...container.children].map((node) => node.tagName)).toEqual(["HEADER", "SECTION", "SECTION"]);
         expect(screen.getByRole("heading", { level: 1, name: "Polyphonic Piano Engine" })).toBeTruthy();
-        expect(screen.getAllByRole("button")).toHaveLength(88);
+        expect(container.querySelectorAll("ol button")).toHaveLength(88);
     });
 });
