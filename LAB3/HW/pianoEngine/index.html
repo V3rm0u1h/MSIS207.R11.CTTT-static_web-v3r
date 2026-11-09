@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Polyphonic Piano Engine – 88-Key Piano</title>
+  <meta name="description" content="An 88-key piano (A0 to C8) generated algorithmically from MIDI note numbers.">
+  <meta name="theme-color" content="#101218">
+  <!-- Empty inline icon: no /favicon.ico request, so no 404 in the console. -->
+  <link rel="icon" href="data:,">
+  <style>
+    /* T-02A design tokens; contrast is checked by src/theme.test.js. */
+    :root {
+      --piano-background: #101218;
+      --piano-text: #f8fafc;
+      --piano-muted: #cbd5e1;
+      --piano-white-key: #f8fafc;
+      --piano-white-text: #0f172a;
+      --piano-key-border: #64748b;
+      --piano-black-key: #111827;
+      --piano-black-text: #f8fafc;
+      --piano-black-border: #64748b;
+      --piano-focus: #8b5cf6;
+      --piano-white-width: 2.5rem;
+      --piano-white-height: 11rem;
+      --piano-black-height: 7rem;
+      color-scheme: dark;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      line-height: 1.4;
+      color: var(--piano-text);
+      background: var(--piano-background);
+    }
+    body { margin: 0; min-height: 100vh; }
+    #root { max-width: 80rem; margin: 0 auto; padding: 1.5rem 1rem 2rem; }
+    h1 { margin: 0; font-size: clamp(1.5rem, 4vw, 2.25rem); }
+    header p { margin: 0.25rem 0 1.25rem; color: var(--piano-muted); }
+  </style>
+</head>
+<body>
+  <main id="root"></main>
+  <noscript>JavaScript must be enabled to play the piano.</noscript>
+  <script type="module" src="/src/main.jsx"></script>
+</body>
+</html>
