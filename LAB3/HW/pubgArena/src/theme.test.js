@@ -3,7 +3,8 @@ import { describe, expect, test } from "vitest";
 import INDEX_HTML from "../index.html?raw";
 
 // Read as text: the Vitest CSS-Modules setting turns `?raw` imports of *.module.css into class maps.
-const STYLES = readFileSync("src/components/AirdropCountdown.module.css", "utf8");
+const STYLES = readFileSync("src/components/AirdropCountdown.module.css", "utf8")
+    + readFileSync("src/components/AirdropArena.module.css", "utf8");
 
 // WCAG 2.2 AA contrast (1.4.3 text, 1.4.11 non-text) computed from the real --arena-* tokens.
 
@@ -40,7 +41,11 @@ describe("design tokens", () => {
         ["muted text on a card", "muted", "surface"],
         ["countdown digits on a card", "accent", "surface"],
         ["eyebrow on the page", "accent", "background"],
-        ["live badge text", "background", "live"]
+        ["live badge text", "background", "live"],
+        ["claim button label", "background", "accent"],
+        ["success status on a card", "live", "surface"],
+        ["error / looted-out status on a card", "danger", "surface"],
+        ["unavailable button label", "muted", "background"]
     ])("1.4.3: %s is at least 4.5:1", (_, fg, bg) => {
         expect(contrast(T[fg], T[bg])).toBeGreaterThanOrEqual(4.5);
     });
@@ -49,7 +54,9 @@ describe("design tokens", () => {
         ["card border on the page", "border", "background"],
         ["card border on the card", "border", "surface"],
         ["focus ring on the page", "focus", "background"],
-        ["focus ring on a card", "focus", "surface"]
+        ["focus ring on a card", "focus", "surface"],
+        ["retry / failed-card border on a card", "danger", "surface"],
+        ["claim button edge on a card", "accent", "surface"]
     ])("1.4.11: %s is at least 3:1", (_, fg, bg) => {
         expect(contrast(T[fg], T[bg])).toBeGreaterThanOrEqual(3);
     });

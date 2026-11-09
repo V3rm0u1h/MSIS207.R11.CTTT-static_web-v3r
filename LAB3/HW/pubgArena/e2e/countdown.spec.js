@@ -30,8 +30,8 @@ test.afterEach(() => {
     expect(consoleErrors, "no JavaScript errors or warnings in the console").toEqual([]);
 });
 
-const timer = (page, title) => page.getByRole("timer", { name: `${title} countdown` }).locator("time");
-const card = (page, title) => page.getByRole("article", { name: title });
+const timer = (page, title) => page.getByRole("timer", { name: `${title} countdown`, exact: true }).locator("time");
+const card = (page, title) => page.getByRole("article", { name: title, exact: true });
 
 /** Switches the page's visibility the way a tab switch does (Playwright cannot hide a real tab). */
 async function setVisibility(page, state) {
@@ -77,7 +77,7 @@ test("the countdown reaches zero, turns live, and never shows a negative value",
 });
 
 test("only the status is a live region; the ticking timers are not", async ({ page }) => {
-    const live = page.locator("[aria-live]:not([aria-live='off'])");
+    const live = page.getByRole("region", { name: "Countdowns" }).locator("[aria-live]:not([aria-live='off'])");
     await expect(live).toHaveCount(2);
     await expect(live.first()).toHaveAttribute("aria-live", "polite");
     for (const element of await page.getByRole("timer").all()) {
