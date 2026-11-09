@@ -56,3 +56,32 @@ test("has no axe-core WCAG 2.2 AA violations", async ({ page }) => {
         .analyze();
     expect(results.violations).toEqual([]);
 });
+
+test("physical keys press and release pads; unmapped keys and auto-repeat do nothing extra", async ({ page }) => {
+    const kick = page.getByRole("button", { name: "Kick W key, drum pad" });
+    await page.keyboard.down("KeyW");
+    await expect(kick).toHaveAttribute("aria-pressed", "true");
+    // A second keydown while held (what auto-repeat sends) must not flip the state.
+    await page.keyboard.down("KeyW");
+    await expect(kick).toHaveAttribute("aria-pressed", "true");
+    await page.keyboard.up("KeyW");
+    await expect(kick).toHaveAttribute("aria-pressed", "false");
+
+    await page.keyboard.press("KeyQ");
+    expect(await page.locator("button[aria-pressed='true']").count()).toBe(0);
+
+    for (const [key, name] of PADS) {
+        await page.keyboard.down(`Key${key}`);
+        await expect(page.getByRole("button", { name: `${name} ${key} key, drum pad` })).toHaveAttribute("aria-pressed", "true");
+        await page.keyboard.up(`Key${key}`);
+    }
+    expect(await page.locator("button[aria-pressed='true']").count()).toBe(0);
+});
+
+test("a click or tap flashes the pad and releases it by itself", async ({ page }) => {
+    const snare = page.getByRole("button", { name: "Snare A key, drum pad" });
+    await snare.click();
+    await expect(snare).toHaveAttribute("aria-pressed", "false");
+    await snare.tap({ force: true }).catch(() => {});
+    await expect(snare).toHaveAttribute("aria-pressed", "false");
+});

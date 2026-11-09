@@ -22,7 +22,7 @@ describe("DRUM_PADS", () => {
         expect(new Set(DRUM_PADS.map((pad) => pad.id)).size).toBe(7);
         expect(new Set(DRUM_PADS.map((pad) => pad.code)).size).toBe(7);
         expect(new Set(DRUM_PADS.map((pad) => pad.sound)).size).toBe(7);
-        DRUM_PADS.forEach((pad) => expect(pad.sound).toMatch(/^\/sounds\/[a-z]+\.wav$/));
+        DRUM_PADS.forEach((pad) => expect(pad.sound).toMatch(/^\/sounds\/[a-z-]+\.wav$/));
     });
 
     test("is frozen, so no view can mutate the shared configuration", () => {

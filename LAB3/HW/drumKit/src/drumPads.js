@@ -20,7 +20,7 @@ export const DRUM_PADS = Object.freeze([
     Object.freeze({ id: "clap", name: "Clap", code: "KeyD", keyLabel: "D", sound: "/sounds/clap.wav" }),
     Object.freeze({ id: "tom", name: "Tom", code: "KeyJ", keyLabel: "J", sound: "/sounds/tom.wav" }),
     Object.freeze({ id: "cymbal", name: "Cymbal", code: "KeyK", keyLabel: "K", sound: "/sounds/cymbal.wav" }),
-    Object.freeze({ id: "openhat", name: "Open Hi-Hat", code: "KeyL", keyLabel: "L", sound: "/sounds/openhat.wav" })
+    Object.freeze({ id: "open-hihat", name: "Open Hi-Hat", code: "KeyL", keyLabel: "L", sound: "/sounds/open-hihat.wav" })
 ]);
 
 const FIELDS = Object.freeze(["id", "name", "code", "keyLabel", "sound"]);
