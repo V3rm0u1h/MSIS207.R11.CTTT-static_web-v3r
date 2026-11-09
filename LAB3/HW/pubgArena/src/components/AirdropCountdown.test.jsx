@@ -158,9 +158,9 @@ describe("AirdropCountdown", () => {
 });
 
 describe("App", () => {
-    test("renders header, countdowns, claim center and footer with no wrapper; both timers are present", () => {
+    test("renders header, the three sections and footer with no wrapper; both timers are present", () => {
         const { container } = renderInMain(<App />);
-        expect([...container.children].map((n) => n.tagName)).toEqual(["HEADER", "SECTION", "SECTION", "FOOTER"]);
+        expect([...container.children].map((n) => n.tagName)).toEqual(["HEADER", "SECTION", "SECTION", "SECTION", "FOOTER"]);
         expect(screen.getByRole("heading", { level: 1, name: "Airdrop Arena" })).toBeTruthy();
         expect(screen.getAllByRole("timer")).toHaveLength(2);
     });
