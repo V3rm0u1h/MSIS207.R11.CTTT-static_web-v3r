@@ -32,7 +32,7 @@
  *   3. the level meter starts polling until the audio graph is quiet again.
  * So the visual feedback never depends on hearing, nor on the audio working.
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { assertDrumPads } from "../drumPads.js";
 import { buildKeyMap } from "../keyboard.js";
 import { HISTORY_LIMIT, appendHit, createHit, setHitLevel } from "../hitHistory.js";
@@ -45,6 +45,13 @@ import styles from "./DrumKit.module.css";
 
 /** How long a clicked / tapped pad stays lit, in ms. */
 export const FLASH_MS = 120;
+
+/**
+ * T-01D: a hit changes state for the whole kit (history, meter), but only the
+ * pad whose `pressed` flag changed needs to re-render. Its other props are
+ * stable (memoised callback, CSS Module class strings, frozen pad object).
+ */
+const MemoDrumPad = memo(DrumPad);
 
 const EMPTY = Object.freeze(new Set());
 
@@ -145,7 +152,7 @@ export default function DrumKit({ pads, onHit, audio, historyLimit = HISTORY_LIM
                 <h2 id="drum-kit-title" className={styles.kitTitle}>Drum Pads</h2>
                 <ul className={styles.pads}>
                     {pads.map((pad) => (
-                        <DrumPad
+                        <MemoDrumPad
                             key={pad.id}
                             pad={pad}
                             pressed={held.has(pad.id) || flashing.has(pad.id)}

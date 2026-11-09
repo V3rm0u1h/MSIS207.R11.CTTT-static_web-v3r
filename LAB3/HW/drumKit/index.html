@@ -4,12 +4,54 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Production Studio – Interactive Drum Kit</title>
-  <meta name="description" content="A keyboard-playable seven-pad drum kit: Kick, Snare, Hi-Hat, Clap, Tom, Cymbal and Open Hi-Hat.">
+  <meta name="description" content="A keyboard-playable seven-pad drum kit: Kick, Snare, Hi-Hat, Clap, Tom, Cymbal and Open Hi-Hat, with an accessible hit log and level meter.">
+  <meta name="theme-color" content="#101218">
   <!-- Empty inline icon: no /favicon.ico request, so no 404 in the console. -->
   <link rel="icon" href="data:,">
   <style>
-    :root { color-scheme: dark; font-family: system-ui, sans-serif; color: #e6e9f0; background: #0f1218; }
+    /*
+     * T-01D design tokens. Contrast (WCAG 2.2 AA) is verified by
+     * src/theme.test.js, which parses these values:
+     *   text / muted on background and surface  >= 4.5:1  (1.4.3)
+     *   border, accent, focus on their backdrop   >= 3:1   (1.4.11)
+     * The PRD's example border (#475569) is 2.15:1 on the surface, so it is
+     * replaced by #64748b (3.43:1 on surface, 3.93:1 on background).
+     */
+    :root {
+      --studio-background: #101218;
+      --studio-surface: #1b202b;
+      --studio-surface-deep: #0b0e14;
+      --studio-active: #0c4a6e;
+      --studio-text: #f8fafc;
+      --studio-muted: #cbd5e1;
+      --studio-accent: #38bdf8;
+      --studio-border: #64748b;
+      --studio-focus: #facc15;
+      --studio-meter-low: #22c55e;
+      --studio-meter-mid: #f59e0b;
+      --studio-meter-high: #ef4444;
+      --studio-radius: 0.75rem;
+      --studio-gutter: 1rem;
+      color-scheme: dark;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      line-height: 1.4;
+      color: var(--studio-text);
+      background: var(--studio-background);
+    }
     body { margin: 0; min-height: 100vh; }
+    /* Page grid: header and pads full width; meter and hit log side by side on wide screens. */
+    #root {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+      gap: 0 1.5rem;
+      max-width: 72rem;
+      margin: 0 auto;
+      padding: 0 var(--studio-gutter) 2rem;
+    }
+    @media (min-width: 900px) {
+      #root { grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); }
+      #root > header, #root > section[aria-labelledby="drum-kit-title"] { grid-column: 1 / -1; }
+    }
   </style>
 </head>
 <body>

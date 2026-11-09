@@ -1,7 +1,17 @@
-/* Production Studio Drum Kit — T-01A base layout (full visual design lands in a later PRD). */
+/*
+ * Production Studio Drum Kit — styles (T-01A layout, T-01C meter + log, T-01D
+ * studio theme, responsive grid, reduced motion).
+ *
+ * Every colour comes from the --studio-* tokens in index.html, whose contrast
+ * is checked by src/theme.test.js. State is never conveyed by motion alone:
+ * an active pad also changes background and border colour, so the feedback
+ * survives prefers-reduced-motion.
+ */
+
+/* ---- header ------------------------------------------------------------ */
 
 .header {
-    padding: 2rem 1rem 1rem;
+    padding: 2rem 0 1rem;
     text-align: center;
 }
 
@@ -13,20 +23,25 @@
 
 .subtitle {
     margin: 0.25rem 0 0;
-    color: #a3adbf;
+    color: var(--studio-muted);
 }
 
-.kit {
-    padding: 0 1rem 2rem;
-    max-width: 56rem;
-    margin: 0 auto;
-}
+/* ---- section headings -------------------------------------------------- */
 
-.kitTitle {
+.kitTitle,
+.meter h2,
+.log h2 {
+    margin: 1.25rem 0 0.75rem;
     font-size: 1rem;
     text-transform: uppercase;
     letter-spacing: 0.12em;
-    color: #a3adbf;
+    color: var(--studio-muted);
+}
+
+/* ---- pads -------------------------------------------------------------- */
+
+.kit {
+    min-width: 0;
 }
 
 .pads {
@@ -35,39 +50,80 @@
     padding: 0;
     display: grid;
     gap: 0.75rem;
-    grid-template-columns: repeat(auto-fit, minmax(7.5rem, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));   /* phone: 2 × 4 */
+}
+
+@media (min-width: 600px) {
+    .pads { grid-template-columns: repeat(4, minmax(0, 1fr)); }   /* tablet: 4 + 3 */
+}
+
+@media (min-width: 900px) {
+    .pads { grid-template-columns: repeat(7, minmax(0, 1fr)); }   /* desktop: one row */
 }
 
 .pad {
     width: 100%;
-    min-height: 6rem;
+    min-height: 6rem;               /* far above the 24 × 24 px minimum (2.5.8) */
     display: grid;
     gap: 0.5rem;
     place-content: center;
+    padding: 0.75rem 0.5rem;
     font: inherit;
-    color: inherit;
-    background: #1b212c;
-    border: 2px solid #2f3a4c;
-    border-radius: 0.75rem;
+    color: var(--studio-text);
+    background: var(--studio-surface);
+    border: 2px solid var(--studio-border);
+    border-radius: var(--studio-radius);
     cursor: pointer;
+    touch-action: manipulation;     /* no 300 ms tap delay, no double-tap zoom */
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    transition: background-color 120ms ease-out, border-color 120ms ease-out, transform 120ms ease-out;
 }
 
-.pad:hover { border-color: #5b6b85; }
-.pad:focus-visible { outline: 3px solid #7cc4ff; outline-offset: 3px; }
-.pad[aria-pressed="true"] { background: #2a3a55; border-color: #7cc4ff; }
+.pad:hover {
+    border-color: var(--studio-accent);
+}
+
+.pad:focus-visible {
+    outline: 3px solid var(--studio-focus);
+    outline-offset: 3px;
+}
+
+/* Active state: colour change (always) + a short pulse (unless reduced motion). */
+.pad[aria-pressed="true"] {
+    background: var(--studio-active);
+    border-color: var(--studio-accent);
+    transform: scale(0.97);
+    animation: padHit 160ms ease-out;
+}
+
+@keyframes padHit {
+    0%   { box-shadow: 0 0 0 0 var(--studio-accent); }
+    100% { box-shadow: 0 0 0 0.75rem transparent; }
+}
 
 .padName {
     font-weight: 600;
+    text-align: center;
+    overflow-wrap: anywhere;
 }
 
-.padKey {
+.padKey,
+.logItem kbd {
     justify-self: center;
     min-width: 1.75rem;
     padding: 0.15rem 0.5rem;
     border-radius: 0.375rem;
-    background: #0f1218;
-    border: 1px solid #2f3a4c;
+    background: var(--studio-surface-deep);
+    border: 1px solid var(--studio-border);
+    color: var(--studio-text);
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    text-align: center;
+}
+
+.pad[aria-pressed="true"] .padKey {
+    border-color: var(--studio-accent);
 }
 
 /* Text for assistive technology only (WCAG-safe visually hidden pattern). */
@@ -84,21 +140,11 @@
     border: 0;
 }
 
-/* ---- T-01C: level meter ------------------------------------------------ */
+/* ---- level meter (T-01C) ----------------------------------------------- */
 
 .meter,
 .log {
-    padding: 0 1rem 2rem;
-    max-width: 56rem;
-    margin: 0 auto;
-}
-
-.meter h2,
-.log h2 {
-    font-size: 1rem;
-    text-transform: uppercase;
-    letter-spacing: 0.12em;
-    color: #a3adbf;
+    min-width: 0;
 }
 
 .meterBar {
@@ -106,14 +152,14 @@
     width: 100%;
     height: 1.25rem;
     border-radius: 0.5rem;
-    background: #1b212c;
-    border: 1px solid #2f3a4c;
+    background: var(--studio-surface);
+    border: 1px solid var(--studio-border);
     overflow: hidden;
 }
 
 /* Chromium / WebKit */
 .meterBar::-webkit-meter-bar {
-    background: #1b212c;
+    background: var(--studio-surface);
     border: 0;
     border-radius: 0.5rem;
 }
@@ -121,17 +167,18 @@
 .meterBar::-webkit-meter-optimum-value,
 .meterBar::-webkit-meter-suboptimum-value,
 .meterBar::-webkit-meter-even-less-good-value {
-    background: linear-gradient(90deg, #2ec27e 0%, #f5c211 70%, #e01b24 100%);
+    background: linear-gradient(90deg, var(--studio-meter-low) 0%, var(--studio-meter-mid) 70%, var(--studio-meter-high) 100%);
     transition: width 60ms linear;
 }
 
 /* Firefox */
 .meterBar::-moz-meter-bar {
-    background: linear-gradient(90deg, #2ec27e 0%, #f5c211 70%, #e01b24 100%);
+    background: linear-gradient(90deg, var(--studio-meter-low) 0%, var(--studio-meter-mid) 70%, var(--studio-meter-high) 100%);
 }
 
 .meterReadout {
     display: block;
+    min-height: 1.75rem;            /* reserved: the text changes, the layout does not */
     margin-top: 0.5rem;
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
     font-size: 1.25rem;
@@ -139,16 +186,16 @@
 }
 
 .meterReadout[data-state="inactive"] {
-    color: #a3adbf;
+    color: var(--studio-muted);
 }
 
 .meterNote {
     margin: 0.25rem 0 0;
     font-size: 0.875rem;
-    color: #a3adbf;
+    color: var(--studio-muted);
 }
 
-/* ---- T-01C: hit log ---------------------------------------------------- */
+/* ---- hit log (T-01C) --------------------------------------------------- */
 
 .logStatus {
     display: block;
@@ -167,31 +214,26 @@
 
 .logItem {
     display: grid;
-    grid-template-columns: 3rem minmax(5rem, 1fr) 2.25rem auto minmax(4rem, 8rem);
+    grid-template-columns: 2.5rem minmax(0, 1fr) 2.25rem minmax(3rem, 5rem);
     align-items: center;
     gap: 0.5rem;
     padding: 0.375rem 0.625rem;
-    background: #1b212c;
-    border: 1px solid #2f3a4c;
+    background: var(--studio-surface);
+    border: 1px solid var(--studio-border);
     border-radius: 0.5rem;
     font-variant-numeric: tabular-nums;
 }
 
-.logItem kbd {
-    justify-self: center;
-    min-width: 1.75rem;
-    padding: 0.1rem 0.4rem;
-    border-radius: 0.375rem;
-    background: #0f1218;
-    border: 1px solid #2f3a4c;
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-    text-align: center;
-}
-
 .logItem time {
-    color: #a3adbf;
+    display: none;
+    color: var(--studio-muted);
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
     font-size: 0.875rem;
+}
+
+@media (min-width: 480px) {
+    .logItem { grid-template-columns: 3rem minmax(0, 1fr) 2.25rem auto minmax(4rem, 8rem); }
+    .logItem time { display: block; }
 }
 
 .logMeter {
@@ -199,12 +241,19 @@
     height: 0.75rem;
 }
 
-@media (max-width: 480px) {
-    .logItem {
-        grid-template-columns: 2.5rem 1fr 2rem minmax(3rem, 5rem);
+/* ---- reduced motion (T-01D) -------------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        scroll-behavior: auto !important;
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
     }
 
-    .logItem time {
-        display: none;
+    .pad[aria-pressed="true"] {
+        transform: none;            /* the colour change alone shows the state */
     }
 }

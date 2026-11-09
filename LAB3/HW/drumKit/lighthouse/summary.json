@@ -1,0 +1,46 @@
+{
+  "url": "http://localhost:4173/",
+  "fetchedAt": "2026-11-09T04:27:22.386Z",
+  "lighthouseVersion": "12.8.2",
+  "formFactor": "mobile",
+  "scores": {
+    "performance": 100,
+    "accessibility": 100,
+    "best-practices": 100,
+    "seo": 100
+  },
+  "metrics": {
+    "first-contentful-paint": "1.2 s",
+    "largest-contentful-paint": "1.2 s",
+    "total-blocking-time": "0 ms",
+    "cumulative-layout-shift": "0",
+    "speed-index": "1.2 s"
+  },
+  "failedAudits": [
+    {
+      "id": "first-contentful-paint",
+      "title": "First Contentful Paint",
+      "score": 0.99
+    },
+    {
+      "id": "render-blocking-resources",
+      "title": "Eliminate render-blocking resources",
+      "score": 0
+    },
+    {
+      "id": "unused-javascript",
+      "title": "Reduce unused JavaScript",
+      "score": 0
+    },
+    {
+      "id": "network-dependency-tree-insight",
+      "title": "Network dependency tree",
+      "score": 0
+    },
+    {
+      "id": "render-blocking-insight",
+      "title": "Render blocking requests",
+      "score": 0
+    }
+  ]
+}
