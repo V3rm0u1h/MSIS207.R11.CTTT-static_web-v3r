@@ -85,3 +85,38 @@ test("a click or tap flashes the pad and releases it by itself", async ({ page }
     await snare.tap({ force: true }).catch(() => {});
     await expect(snare).toHaveAttribute("aria-pressed", "false");
 });
+
+test("a hit is logged, announced politely, and plays audio that moves the level meter", async ({ page }) => {
+    const log = page.getByRole("region", { name: "Hit Log" });
+    const status = log.locator("output");
+    await expect(status).toHaveText("No drum hits yet");
+    await expect(status).toHaveAttribute("aria-live", "polite");
+    await expect(status).toHaveAttribute("aria-atomic", "true");
+
+    await page.keyboard.press("KeyW");
+    await expect(status).toHaveText("Kick triggered, hit 1");
+    const items = log.getByRole("listitem");
+    await expect(items).toHaveCount(1);
+    await expect(items.first()).toContainText("Kick");
+    await expect(items.first().locator("kbd")).toHaveText("W");
+    // The sample decodes and the entry gets its intensity.
+    await expect(items.first().getByRole("meter")).toHaveAccessibleName(/Intensity \d+%/);
+
+    // Meter: labelled as a relative signal level, active while the sample plays, then inactive again.
+    const meterRegion = page.getByRole("region", { name: "Audio Level" });
+    const meter = meterRegion.getByRole("meter", { name: "Relative audio signal level" });
+    await expect(meterRegion).toContainText("dBFS");
+    await expect(meterRegion).not.toContainText(/dB SPL(?!\.)(?! )/);
+    await page.keyboard.press("KeyK"); // the long cymbal
+    await expect(meterRegion).toHaveAttribute("data-state", "active", { timeout: 2000 });
+    await expect(meterRegion).toHaveAttribute("data-state", "inactive", { timeout: 8000 });
+    await expect(meter).toHaveAttribute("value", "0");
+});
+
+test("the hit log is capped and only the newest hit is announced", async ({ page }) => {
+    for (let n = 0; n < 15; n += 1) await page.keyboard.press("KeyS");
+    const log = page.getByRole("region", { name: "Hit Log" });
+    await expect(log.locator("output")).toHaveText("Hi-Hat triggered, hit 15");
+    await expect(log.getByRole("listitem")).toHaveCount(12);
+    await expect(log.getByRole("listitem").first()).toContainText("#15");
+});
