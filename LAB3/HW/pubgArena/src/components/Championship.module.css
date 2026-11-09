@@ -102,7 +102,8 @@
 
 .table {
     width: 100%;
-    min-width: 34rem;
+    /* Fits the 3fr column at 1024px (34rem did not: the compact desktop scrolled sideways). */
+    min-width: 30rem;
     border-collapse: collapse;
     font-variant-numeric: tabular-nums;
 }
@@ -123,6 +124,8 @@
 }
 
 .table thead th {
+    white-space: normal;
+    vertical-align: bottom;
     font-size: 0.8125rem;
     text-transform: uppercase;
     letter-spacing: 0.04em;
