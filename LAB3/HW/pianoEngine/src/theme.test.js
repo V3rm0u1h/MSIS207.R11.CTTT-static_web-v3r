@@ -3,8 +3,8 @@ import { describe, expect, test } from "vitest";
 import INDEX_HTML from "../index.html?raw";
 
 // Read as text: the Vitest CSS-Modules setting turns `?raw` imports of *.module.css into class maps.
-const STYLES = readFileSync("src/components/Piano.module.css", "utf8")
-    + readFileSync("src/components/RecorderControls.module.css", "utf8");
+const STYLES = readFileSync("src/components/PianoKeyboard.module.css", "utf8")
+    + readFileSync("src/components/Controls.module.css", "utf8");
 
 // T-02A — key colours meet WCAG 2.2 AA (1.4.3 text, 1.4.11 non-text), computed from the real tokens.
 

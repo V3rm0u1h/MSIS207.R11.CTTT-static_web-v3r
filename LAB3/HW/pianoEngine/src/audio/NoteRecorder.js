@@ -24,7 +24,7 @@
  * replays it can change it.
  */
 import { AudioTaskQueue } from "./AudioTaskQueue.js";
-import { midiToFrequency } from "../piano.js";
+import { midiToFrequency } from "../utils/midiUtils.js";
 
 const EVENT_FIELDS = Object.freeze(["midi", "freqHz", "durationMs", "deltaMs"]);
 

@@ -1,5 +1,8 @@
 /**
- * Polyphonic Piano Engine — T-02A algorithmic 88-key generation
+ * Polyphonic Piano Engine — T-02A algorithmic 88-key generation (MIDI utilities)
+ *
+ * The range and note tables are plain data in data/pianoConfig.js; every
+ * function that derives something from a MIDI number lives here.
  *
  * The keyboard is computed from MIDI numbers, never written out by hand:
  * a loop over MIDI 21 (A0) … 108 (C8) derives every key's note name, octave,
@@ -16,21 +19,9 @@
  * startup instead of a silently broken button.
  */
 
-export const PIANO_CONFIG = Object.freeze({
-    startMidi: 21,
-    endMidi: 108,
-    totalKeys: 88
-});
+import { BLACK_NOTE_CLASSES, NOTE_NAMES, PIANO_CONFIG, WHITE_NOTES } from "../data/pianoConfig.js";
 
-export const NOTE_NAMES = Object.freeze([
-    "C", "C#", "D", "D#",
-    "E", "F", "F#", "G",
-    "G#", "A", "A#", "B"
-]);
-
-export const WHITE_NOTES = Object.freeze(["C", "D", "E", "F", "G", "A", "B"]);
-
-export const BLACK_NOTE_CLASSES = Object.freeze(["C#", "D#", "F#", "G#", "A#"]);
+export { BLACK_NOTE_CLASSES, NOTE_NAMES, PIANO_CONFIG, WHITE_NOTES };
 
 /** MIDI 0 … 127, the full range a MIDI note number can take. */
 const MIDI_MIN = 0;
@@ -155,4 +146,9 @@ export function layoutPianoKeys(pianoKeys) {
     return Object.freeze({ placements: Object.freeze(placements), columns: whiteCount * UNITS_PER_WHITE, whiteCount });
 }
 
+/**
+ * The 88 generated keys, created once at module load. The array and every key
+ * object are frozen and never recreated, so a memoised PianoKey always gets
+ * the same `pianoKey` reference (T-02D render isolation).
+ */
 export const PIANO_KEYS = generatePianoKeys(PIANO_CONFIG);

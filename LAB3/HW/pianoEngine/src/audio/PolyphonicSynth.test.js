@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 import {
     DEFAULT_MAX_VOICES, PolyphonicSynth, RELEASE_S, SILENT_GAIN, STOP_S, VOICE_GAIN
 } from "./PolyphonicSynth.js";
-import { createPianoKey } from "../piano.js";
+import { createPianoKey } from "../utils/midiUtils.js";
 
 // T-02B — 8-voice polyphonic synth, FIFO stealing, click-free release (PRD 2, Project Rule 2).
 

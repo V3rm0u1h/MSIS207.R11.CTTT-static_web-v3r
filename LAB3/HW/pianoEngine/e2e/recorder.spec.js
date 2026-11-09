@@ -13,13 +13,15 @@ test.beforeEach(async ({ page }) => {
     });
     page.on("pageerror", (error) => consoleErrors.push(error.message));
     await page.goto("/");
-    await expect(page.getByRole("region", { name: "Recorder" })).toBeVisible();
+    await expect(page.getByRole("region", { name: "Recording" })).toBeVisible();
 });
 
 test.afterEach(() => {
     expect(consoleErrors, "no JavaScript errors or warnings in the console").toEqual([]);
 });
 
+const recordingStatus = (page) => page.getByRole("region", { name: "Recording" }).getByRole("status");
+const playbackStatus = (page) => page.getByRole("region", { name: "Sequencer" }).getByRole("status");
 const control = (page, name) => page.getByRole("button", { name, exact: true });
 const pianoKey = (page, name) => page.getByRole("button", { name: `${name} key` });
 
@@ -39,7 +41,7 @@ async function recordThreeNotes(page) {
     await hold(page, "E4 white", 250);
     await hold(page, "G4 white", 250);
     await control(page, "Stop Recording").click();
-    await expect(page.getByRole("status")).toHaveText("Recording stopped: 3 notes recorded.");
+    await expect(recordingStatus(page)).toHaveText("Recording stopped: 3 notes recorded.");
 }
 
 /** Records, page side, when each key becomes pressed and the playback's total time. */
@@ -59,7 +61,7 @@ async function timeReplay(page, label) {
         window.__observer.observe(document.querySelector("ol"), { subtree: true, attributeFilter: ["aria-pressed"], attributeOldValue: true });
     });
     await control(page, "Play Sequence").click();
-    await expect(page.getByRole("status")).toHaveText("Playback finished.", { timeout: 10000 });
+    await expect(playbackStatus(page)).toHaveText("Playback finished.", { timeout: 10000 });
     return page.evaluate(() => ({ onsets: window.__onsets, total: performance.now() - window.__replayStart }));
 }
 
@@ -98,7 +100,7 @@ test("replay at 0.5×, 1.0× and 2.0× keeps the note order and scales the timin
 test("Clear Recording empties the take; Play Sequence is then unavailable", async ({ page }) => {
     await recordThreeNotes(page);
     await control(page, "Clear Recording").click();
-    await expect(page.getByRole("status")).toHaveText("Recording cleared.");
+    await expect(recordingStatus(page)).toHaveText("Recording cleared.");
     await expect(page.getByText("No notes recorded yet.")).toBeVisible();
     await expect(control(page, "Play Sequence")).toHaveAttribute("aria-disabled", "true");
 });
@@ -118,7 +120,7 @@ test("keyboard only: record with Space held on keys, replay with Enter", async (
     await expect(page.getByRole("table").locator("tbody tr")).toHaveCount(1);
     await control(page, "Play Sequence").focus();
     await page.keyboard.press("Enter");
-    await expect(page.getByRole("status")).toHaveText("Playback finished.");
+    await expect(playbackStatus(page)).toHaveText("Playback finished.");
 });
 
 test("axe WCAG 2.2 AA clean with a recording on screen, at 375px", async ({ page }) => {

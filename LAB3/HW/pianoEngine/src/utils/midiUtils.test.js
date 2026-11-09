@@ -3,7 +3,7 @@ import {
     BLACK_NOTE_CLASSES, BLACK_UNITS, NOTE_NAMES, PIANO_CONFIG, PIANO_KEYS, UNITS_PER_WHITE, WHITE_NOTES,
     assertPianoConfig, assertPianoKey, assertPianoKeys, createPianoKey, generatePianoKeys, keyLabel,
     layoutPianoKeys, midiToFrequency
-} from "./piano.js";
+} from "./midiUtils.js";
 
 // T-02A — algorithmic 88-key generation (PRD 1 sections 2–4 and 7, Project Rule 2).
 

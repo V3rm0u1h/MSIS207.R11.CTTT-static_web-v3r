@@ -104,6 +104,9 @@ test("2.4.11: a key focused off-screen scrolls into view inside the keyboard", a
 });
 
 test("2.4.7: keyboard focus shows a 3px ring", async ({ page }) => {
+    // Tab order: Release All Notes (Voices panel), then the first key, A0.
+    await page.keyboard.press("Tab");
+    await expect(page.getByRole("button", { name: "Release All Notes" })).toBeFocused();
     await page.keyboard.press("Tab");
     const ring = await page.evaluate(() => {
         const style = getComputedStyle(document.activeElement);

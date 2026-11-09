@@ -1,8 +1,24 @@
-/* Polyphonic Piano Engine — recorder styles (T-02C). Colours come from the --piano-* tokens. */
+/* Polyphonic Piano Engine — styles shared by PianoControls, RecordingControls and SequencerControls. Colours come from the --piano-* tokens. */
 
-.recorder {
+.panel {
     margin-top: 1.5rem;
     min-width: 0;
+}
+
+.voices {
+    margin-bottom: 1rem;
+}
+
+.voiceRow {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 1rem;
+    margin: 0;
+}
+
+.voiceReadout {
+    font-variant-numeric: tabular-nums;
 }
 
 .title {
