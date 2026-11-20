@@ -16,6 +16,16 @@ else {
     if (!(entry.dynamicImports ?? []).includes(detailKey)) failures.push("entry does not dynamically import PersonDetail");
 }
 
+// Content check: markers that exist only in PersonDetail.tsx must not be in the initial JS.
+if (entry && detail) {
+    const entryCode = readFileSync(new URL(`../dist/${entry.file}`, import.meta.url), "utf8");
+    const detailCode = readFileSync(new URL(`../dist/${detail.file}`, import.meta.url), "utf8");
+    for (const marker of ["pd-skills-title", "mailto:"]) {
+        if (!detailCode.includes(marker)) failures.push(`marker "${marker}" missing from the PersonDetail chunk (check is stale)`);
+        if (entryCode.includes(marker)) failures.push(`initial bundle eagerly contains PersonDetail code ("${marker}")`);
+    }
+}
+
 if (failures.length) {
     console.error("Chunk verification FAILED:\n- " + failures.join("\n- "));
     process.exit(1);

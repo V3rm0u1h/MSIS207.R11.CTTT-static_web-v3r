@@ -3,19 +3,38 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import PersonDetailSkeleton from "./PersonDetailSkeleton";
 import PersonDetail from "./PersonDetail";
+import { LoadingRegion } from "./LoadingRegion";
 import { people } from "../data/people";
 
-const rowClasses = (root: Element) => [...root.children].map((child) => child.classList[0]).filter((c) => c !== "visually-hidden");
+const rowClasses = (root: Element) => [...root.children].map((child) => child.classList[0]);
 
 describe("PersonDetailSkeleton", () => {
-    it("announces one loading status and hides every placeholder from assistive tech", () => {
+    it("is decorative: hidden from assistive tech, nothing focusable, no own live region", () => {
         const { container } = render(<PersonDetailSkeleton />);
-        const status = screen.getByRole("status");
-        expect(status).toHaveTextContent("Loading profile…");
-        expect(status).toHaveAttribute("aria-busy", "true");
-        const placeholders = container.querySelectorAll(".sk");
-        expect(placeholders.length).toBeGreaterThan(0);
-        placeholders.forEach((bar) => expect(bar.closest("[aria-hidden='true']")).not.toBeNull());
+        const root = container.firstElementChild!;
+        expect(root).toHaveAttribute("aria-hidden", "true");
+        expect(root.querySelector("a, button, input, [tabindex]")).toBeNull();
+        expect(root.querySelector("[role], [aria-live]")).toBeNull();
+        expect(root).not.toHaveAttribute("role");
+        expect(root).not.toHaveAttribute("aria-live");
+    });
+
+    it("marks the enclosing LoadingRegion busy while mounted, ready when unmounted", () => {
+        const { rerender } = render(
+            <LoadingRegion label="Profile">
+                <PersonDetailSkeleton />
+            </LoadingRegion>
+        );
+        expect(screen.getByRole("region", { name: "Profile" })).toHaveAttribute("aria-busy", "true");
+        expect(screen.getByRole("status")).toHaveTextContent("Loading profile…");
+
+        rerender(
+            <LoadingRegion label="Profile">
+                <PersonDetail person={people[0]} />
+            </LoadingRegion>
+        );
+        expect(screen.getByRole("region", { name: "Profile" })).toHaveAttribute("aria-busy", "false");
+        expect(screen.getByRole("status")).toHaveTextContent("Profile loaded.");
     });
 
     it("mirrors PersonDetail's row structure with the same layout classes", () => {

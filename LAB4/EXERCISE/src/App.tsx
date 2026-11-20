@@ -2,6 +2,7 @@ import { Suspense, useState } from "react";
 import { people } from "./data/people";
 import PersonDetail from "./components/LazyPersonDetail";
 import PersonDetailSkeleton from "./components/PersonDetailSkeleton";
+import { LoadingRegion } from "./components/LoadingRegion";
 
 export default function App() {
     const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -27,15 +28,17 @@ export default function App() {
                     ))}
                 </ul>
             </nav>
-            {selected ? (
-                // Scoped boundary: only the lazy PersonDetail slot suspends, so the
-                // header and navigation stay on screen while its chunk downloads.
-                <Suspense fallback={<PersonDetailSkeleton />}>
-                    <PersonDetail person={selected} />
-                </Suspense>
-            ) : (
-                <p>Select a person to view their profile.</p>
-            )}
+            <LoadingRegion label="Profile">
+                {selected ? (
+                    // Scoped boundary: only the lazy PersonDetail slot suspends, so the
+                    // header and navigation stay on screen while its chunk downloads.
+                    <Suspense fallback={<PersonDetailSkeleton />}>
+                        <PersonDetail person={selected} />
+                    </Suspense>
+                ) : (
+                    <p>Select a person to view their profile.</p>
+                )}
+            </LoadingRegion>
         </main>
     );
 }
