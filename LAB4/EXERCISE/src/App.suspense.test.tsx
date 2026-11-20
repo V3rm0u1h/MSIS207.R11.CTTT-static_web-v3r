@@ -30,6 +30,7 @@ describe("Suspense boundary around lazy PersonDetail", () => {
 
         // Loading: fallback visible, navigation still on screen (no blank page).
         expect(screen.getByRole("status")).toHaveTextContent(/loading profile/i);
+        expect(screen.getByRole("status")).toHaveClass("person-detail--skeleton");
         expect(screen.getByRole("heading", { level: 1, name: "People Directory" })).toBeInTheDocument();
         expect(screen.getByRole("navigation", { name: "People" })).toBeInTheDocument();
         expect(screen.queryByRole("article", { name: people[0].name })).not.toBeInTheDocument();

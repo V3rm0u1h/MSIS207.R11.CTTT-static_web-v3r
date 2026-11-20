@@ -1,6 +1,7 @@
 import { Suspense, useState } from "react";
 import { people } from "./data/people";
 import PersonDetail from "./components/LazyPersonDetail";
+import PersonDetailSkeleton from "./components/PersonDetailSkeleton";
 
 export default function App() {
     const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -29,7 +30,7 @@ export default function App() {
             {selected ? (
                 // Scoped boundary: only the lazy PersonDetail slot suspends, so the
                 // header and navigation stay on screen while its chunk downloads.
-                <Suspense fallback={<p role="status">Loading profile…</p>}>
+                <Suspense fallback={<PersonDetailSkeleton />}>
                     <PersonDetail person={selected} />
                 </Suspense>
             ) : (

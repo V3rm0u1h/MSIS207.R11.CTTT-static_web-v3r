@@ -1,0 +1,61 @@
+:root {
+    --color-bg: #f7f7f5;
+    --color-surface: #ffffff;
+    --color-text: #1c1c1a;
+    --color-muted: #55554f;
+    --color-border: #d9d8d2;
+    --color-accent: #1f5fbf;
+    --color-skeleton: #e4e3dd;
+    color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+    :root {
+        --color-bg: #121314;
+        --color-surface: #1b1c1e;
+        --color-text: #ededea;
+        --color-muted: #b4b3ad;
+        --color-border: #34353a;
+        --color-accent: #8ab4f8;
+        --color-skeleton: #2c2d31;
+        color-scheme: dark;
+    }
+}
+*, *::before, *::after { box-sizing: border-box; }
+body {
+    margin: 0;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-size: 16px;
+    line-height: 1.5;
+    background: var(--color-bg);
+    color: var(--color-text);
+}
+main {
+    max-inline-size: 44rem;
+    margin-inline: auto;
+    padding: 1.5rem 1rem 3rem;
+}
+h1 { margin: 0 0 1rem; font-size: 1.75rem; line-height: 2.25rem; }
+nav ul { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0; padding: 0; list-style: none; }
+nav button {
+    font: inherit;
+    padding: 0.5rem 0.875rem;
+    border: 1px solid var(--color-border);
+    border-radius: 999px;
+    background: var(--color-surface);
+    color: var(--color-text);
+    cursor: pointer;
+}
+nav button[aria-pressed="true"] { border-color: var(--color-accent); color: var(--color-accent); font-weight: 600; }
+nav button:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+a { color: var(--color-accent); }
+.visually-hidden {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+}
