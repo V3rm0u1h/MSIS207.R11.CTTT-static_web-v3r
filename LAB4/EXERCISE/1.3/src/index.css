@@ -6,6 +6,8 @@
     --color-border: #b9b8b1;
     --color-accent: #1f5fbf;
     --color-error: #b3261e;
+    --color-code-bg: #1f2328;
+    --color-code-text: #e6edf3;
     color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
@@ -17,6 +19,8 @@
         --color-border: #4a4b50;
         --color-accent: #8ab4f8;
         --color-error: #f2b8b5;
+    --color-code-bg: #0b0c0e;
+    --color-code-text: #e6edf3;
         color-scheme: dark;
     }
 }
@@ -65,3 +69,30 @@ button[type="submit"] {
 .field-required { color: var(--color-error); }
 .field input[aria-invalid="true"] { border-color: var(--color-error); border-width: 2px; }
 .field-error { margin: 0; color: var(--color-error); font-size: 0.875rem; }
+
+/* ---- ShowData inspector ---- */
+.show-data {
+    margin-block-start: 1.5rem;
+    padding: 1rem 1.25rem 1.25rem;
+    border: 1px solid var(--color-border);
+    border-inline-start: 4px solid var(--color-accent);
+    border-radius: 8px;
+    background: var(--color-surface);
+    min-inline-size: 0;
+}
+.show-data h2 { margin: 0; font-size: 1.25rem; line-height: 1.75rem; }
+.show-data-meta { margin: 0.25rem 0 0.75rem; color: var(--color-muted); font-size: 0.875rem; }
+.show-data pre {
+    margin: 0;
+    padding: 0.875rem 1rem;
+    border-radius: 6px;
+    background: var(--color-code-bg);
+    color: var(--color-code-text);
+    font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+    font-size: 0.875rem;
+    line-height: 1.6;
+    tab-size: 2;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}

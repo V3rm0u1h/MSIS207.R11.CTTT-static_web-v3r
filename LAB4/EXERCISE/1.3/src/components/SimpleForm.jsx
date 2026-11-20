@@ -1,5 +1,6 @@
 import { createContext, useContext, useRef, useState } from "react";
 import { all, validateField as checkField, validateForm as checkForm } from "../validation/validators";
+import ShowData from "./ShowData";
 
 const FormContext = createContext(null);
 
@@ -33,11 +34,27 @@ function sameErrors(a, b) {
  * unregisters in the callback's cleanup. Optional form-level `rules`
  * ({ [name]: (value, allValues) => message }) are layered on top.
  *
- * Props: initialValues, rules, onSubmit(valuesCopy), children, ...<form> props.
+ * Successful submissions: handleSubmit stores a SNAPSHOT of the validated
+ * values in `submission` (set nowhere else), rendered by <ShowData /> after the
+ * form. Invalid submits return before touching it, so the last good result
+ * stays; later edits don't change it because it is a copy, not live state.
+ *
+ * Props: initialValues, rules, onSubmit(valuesCopy), showData (default true),
+ * redactKeys (masked in the inspector), children, ...<form> props.
  */
-export default function SimpleForm({ initialValues = {}, rules = {}, onSubmit, children, ...formProps }) {
+export default function SimpleForm({
+    initialValues = {},
+    rules = {},
+    onSubmit,
+    showData = true,
+    redactKeys,
+    children,
+    ...formProps
+}) {
     const [values, setValues] = useState(initialValues);
     const [errors, setErrors] = useState({});
+    // Latest successful submission: { data: snapshot, number: 1-based count }.
+    const [submission, setSubmission] = useState(null);
 
     // Latest committed state, written synchronously by the handlers so several
     // updates in one tick compose instead of reading a stale render snapshot.
@@ -130,7 +147,9 @@ export default function SimpleForm({ initialValues = {}, rules = {}, onSubmit, c
         event?.preventDefault();
         const submitted = latest.current.values;
         const nextErrors = validateForm(submitted);
-        if (Object.keys(nextErrors).length > 0) return false;
+        if (Object.keys(nextErrors).length > 0) return false; // previous result untouched
+        const snapshot = { ...submitted };
+        setSubmission((previous) => ({ data: snapshot, number: (previous?.number ?? 0) + 1 }));
         onSubmit?.({ ...submitted });
         return true;
     }
@@ -138,6 +157,7 @@ export default function SimpleForm({ initialValues = {}, rules = {}, onSubmit, c
     const formContextValue = {
         values,
         errors,
+        submittedData: submission?.data ?? null,
         handleChange,
         validateField,
         setFieldError,
@@ -151,6 +171,9 @@ export default function SimpleForm({ initialValues = {}, rules = {}, onSubmit, c
             <form noValidate {...formProps} onSubmit={handleSubmit}>
                 {children}
             </form>
+            {showData && (
+                <ShowData data={submission?.data} submissionNumber={submission?.number} redactKeys={redactKeys} />
+            )}
         </FormContext.Provider>
     );
 }
