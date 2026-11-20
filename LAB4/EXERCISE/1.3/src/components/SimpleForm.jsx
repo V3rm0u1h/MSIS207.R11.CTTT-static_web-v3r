@@ -1,4 +1,5 @@
 import { createContext, useContext, useRef, useState } from "react";
+import { all, validateField as checkField, validateForm as checkForm } from "../validation/validators";
 
 const FormContext = createContext(null);
 
@@ -11,30 +12,60 @@ export function useFormContext() {
     return context;
 }
 
-const EMPTY = "";
+/** True when two errors objects hold exactly the same messages. */
+function sameErrors(a, b) {
+    const keys = Object.keys(a);
+    return keys.length === Object.keys(b).length && keys.every((key) => a[key] === b[key]);
+}
 
 /**
  * Central form controller: the single source of truth for `values` and `errors`.
  *
- * Every state transition happens synchronously inside the event handler that
- * caused it — no useEffect copies values between components, and no effect
- * reacts to one state change by making another. Validation (where rules are
- * supplied) runs in the same handler against the exact next values, so there
- * is nothing asynchronous to race and no update can trigger itself again.
+ * Update sequence (all synchronous, inside the event handler):
+ *   input change → InputField → handleChange(name, value) via context
+ *   → SimpleForm computes the next values AND their validation result
+ *   → one setValues + (only if something changed) one setErrors → one render.
+ * No useEffect watches values to recompute errors, and nothing watches errors,
+ * so there is no effect chain, no stale/late result and no update loop.
  *
- * Props:
- * - initialValues: { [fieldName]: string }
- * - rules: { [fieldName]: (value, allValues) => string | undefined }  (message = invalid)
- * - onSubmit: (values) => void   called only when every rule passes
- * - children: the form's fields and controls (composition API preserved)
+ * Validation registry: each InputField registers { label, required, validate }
+ * from its input's ref callback (commit phase, not an effect hook) and
+ * unregisters in the callback's cleanup. Optional form-level `rules`
+ * ({ [name]: (value, allValues) => message }) are layered on top.
+ *
+ * Props: initialValues, rules, onSubmit(valuesCopy), children, ...<form> props.
  */
 export default function SimpleForm({ initialValues = {}, rules = {}, onSubmit, children, ...formProps }) {
     const [values, setValues] = useState(initialValues);
     const [errors, setErrors] = useState({});
 
-    // Latest committed state, updated synchronously by the handlers themselves,
-    // so two updates in the same tick compose instead of overwriting each other.
+    // Latest committed state, written synchronously by the handlers so several
+    // updates in one tick compose instead of reading a stale render snapshot.
     const latest = useRef({ values: initialValues, errors: {} });
+    // name → { label, required, validate } for every mounted InputField.
+    const registry = useRef(new Map());
+    // Fields the user has interacted with (or that were submitted); only these
+    // are re-checked when ANOTHER field changes (cross-field rules).
+    const touched = useRef(new Set());
+
+    function registerField(name, fieldRules) {
+        registry.current.set(name, fieldRules);
+        return () => {
+            if (registry.current.get(name) === fieldRules) registry.current.delete(name);
+        };
+    }
+
+    /** Registered field rules merged with form-level rules: the full validation contract. */
+    function collectRules() {
+        const merged = {};
+        for (const [name, fieldRules] of registry.current) merged[name] = fieldRules;
+        for (const [name, formRule] of Object.entries(rules)) {
+            if (typeof formRule !== "function") continue;
+            const base = merged[name] ?? {};
+            merged[name] = { ...base, validate: base.validate ? all(base.validate, formRule) : formRule };
+        }
+        return merged;
+    }
 
     function commitValues(nextValues) {
         latest.current.values = nextValues;
@@ -42,66 +73,64 @@ export default function SimpleForm({ initialValues = {}, rules = {}, onSubmit, c
     }
 
     function commitErrors(nextErrors) {
+        if (sameErrors(nextErrors, latest.current.errors)) return; // no unnecessary state update
         latest.current.errors = nextErrors;
         setErrors(nextErrors);
     }
 
-    /** Pure: the message for one field under `allValues`, or "" when valid. */
-    function messageFor(name, allValues) {
-        const rule = rules[name];
-        if (typeof rule !== "function") return EMPTY;
-        const message = rule(allValues[name] ?? EMPTY, allValues);
-        return typeof message === "string" ? message : EMPTY;
+    /** errors with `names` re-validated against `allValues`; others untouched. */
+    function errorsWith(names, allValues) {
+        const fieldRules = collectRules();
+        const next = { ...latest.current.errors };
+        for (const name of names) {
+            const message = checkField(name, allValues[name] ?? "", fieldRules[name], allValues);
+            if (message) next[name] = message;
+            else delete next[name];
+        }
+        return next;
     }
 
     /** Set (or clear, with "") one field's error in the central errors object. */
     function setFieldError(name, message) {
-        const current = latest.current.errors;
-        if (!message) {
-            if (!(name in current)) return;
-            const { [name]: _removed, ...rest } = current;
-            commitErrors(rest);
-        } else if (current[name] !== message) {
-            commitErrors({ ...current, [name]: message });
-        }
+        const next = { ...latest.current.errors };
+        if (message) next[name] = message;
+        else delete next[name];
+        commitErrors(next);
     }
 
-    /** Validate one field now; returns its message ("" when valid). */
+    /** Validate one field now (e.g. on blur); returns its message ("" when valid). */
     function validateField(name, allValues = latest.current.values) {
-        const message = messageFor(name, allValues);
-        setFieldError(name, message);
-        return message;
+        touched.current.add(name);
+        const next = errorsWith([name], allValues);
+        commitErrors(next);
+        return next[name] ?? "";
     }
 
-    /** Validate every field that has a rule; returns the complete errors object. */
+    /** Validate every registered field; returns the complete errors object. */
     function validateForm(allValues = latest.current.values) {
-        const nextErrors = {};
-        for (const name of Object.keys(rules)) {
-            const message = messageFor(name, allValues);
-            if (message) nextErrors[name] = message;
-        }
-        commitErrors(nextErrors);
-        return nextErrors;
+        const fieldRules = collectRules();
+        for (const name of Object.keys(fieldRules)) touched.current.add(name);
+        const next = checkForm(allValues, fieldRules);
+        commitErrors(next);
+        return next;
     }
 
     /**
-     * Update one field. Errors already on screen are re-checked against the
-     * NEW values in the same handler (covers cross-field rules), instead of an
-     * effect that would re-render once more after the value lands.
+     * Update one field and validate it against the NEW values in the same
+     * handler, plus any touched field whose rule may depend on it.
      */
     function handleChange(name, value) {
         const nextValues = { ...latest.current.values, [name]: value };
         commitValues(nextValues);
-        for (const shown of Object.keys(latest.current.errors)) {
-            validateField(shown, nextValues);
-        }
+        touched.current.add(name);
+        commitErrors(errorsWith(touched.current, nextValues));
     }
 
     function handleSubmit(event) {
         event?.preventDefault();
         const submitted = latest.current.values;
-        const found = validateForm(submitted);
-        if (Object.keys(found).length > 0) return false;
+        const nextErrors = validateForm(submitted);
+        if (Object.keys(nextErrors).length > 0) return false;
         onSubmit?.({ ...submitted });
         return true;
     }
@@ -113,7 +142,8 @@ export default function SimpleForm({ initialValues = {}, rules = {}, onSubmit, c
         validateField,
         setFieldError,
         validateForm,
-        handleSubmit
+        handleSubmit,
+        registerField
     };
 
     return (

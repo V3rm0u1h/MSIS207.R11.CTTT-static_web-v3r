@@ -62,3 +62,6 @@ button[type="submit"] {
     color: var(--color-surface);
     cursor: pointer;
 }
+.field-required { color: var(--color-error); }
+.field input[aria-invalid="true"] { border-color: var(--color-error); border-width: 2px; }
+.field-error { margin: 0; color: var(--color-error); font-size: 0.875rem; }

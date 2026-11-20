@@ -1,6 +1,7 @@
 import { useState } from "react";
 import SimpleForm from "./components/SimpleForm";
 import InputField from "./components/InputField";
+import { integerBetween, isEmail, matchesField, minLength, strongPassword } from "./validation/validators";
 
 const initialValues = { fullName: "", email: "", age: "", password: "", confirmPassword: "" };
 
@@ -18,11 +19,25 @@ export default function App() {
                 initialValues={initialValues}
                 onSubmit={() => setSubmitCount((count) => count + 1)}
             >
-                <InputField name="fullName" label="Full name" autoComplete="name" />
-                <InputField name="email" label="Email" type="email" autoComplete="email" />
-                <InputField name="age" label="Age" inputMode="numeric" />
-                <InputField name="password" label="Password" type="password" autoComplete="new-password" />
-                <InputField name="confirmPassword" label="Confirm password" type="password" autoComplete="new-password" />
+                <InputField name="fullName" label="Full name" autoComplete="name" required validate={minLength(2)} />
+                <InputField name="email" label="Email" type="email" autoComplete="email" required validate={isEmail()} />
+                <InputField name="age" label="Age" inputMode="numeric" required validate={integerBetween(18, 120)} />
+                <InputField
+                    name="password"
+                    label="Password"
+                    type="password"
+                    autoComplete="new-password"
+                    required
+                    validate={strongPassword()}
+                />
+                <InputField
+                    name="confirmPassword"
+                    label="Confirm password"
+                    type="password"
+                    autoComplete="new-password"
+                    required
+                    validate={matchesField("password", "Passwords must match")}
+                />
                 <button type="submit">Submit</button>
             </SimpleForm>
             <p role="status">{submitCount > 0 ? `Submitted ${submitCount} time${submitCount === 1 ? "" : "s"}.` : ""}</p>
