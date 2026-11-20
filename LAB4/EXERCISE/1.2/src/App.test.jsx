@@ -50,7 +50,7 @@ describe("nested /people routes share PeopleLayout", () => {
     it('"/people/:id" renders PersonDetail in the same layout\'s Outlet', () => {
         renderAt("/people/p-02");
         const content = screen.getByRole("region", { name: "Dossier" });
-        expect(within(content).getByRole("article", { name: "Person dossier" })).toBeInTheDocument();
+        expect(within(content).getByRole("article", { name: "Tran Quoc Bao" })).toBeInTheDocument();
         expect(within(content).queryByRole("heading", { name: "Directory" })).not.toBeInTheDocument();
         expect(directoryNav()).toBeInTheDocument(); // master panel persists
     });
@@ -89,7 +89,7 @@ describe("NavLink active styling", () => {
         await user.click(navLink("Tran Quoc Bao"));
         expect(screen.getByTestId("location")).toHaveTextContent("/people/p-02");
         expect(activeLinks()).toEqual([navLink("Tran Quoc Bao")]);
-        expect(screen.getByRole("article", { name: "Person dossier" })).toBeInTheDocument();
+        expect(screen.getByRole("article", { name: "Tran Quoc Bao" })).toBeInTheDocument();
 
         await user.click(navLink("People"));
         expect(screen.getByTestId("location")).toHaveTextContent(/^\/people$/);
@@ -108,7 +108,7 @@ describe("source guards", () => {
             return /\.jsx?$/.test(name) && !/\.test\./.test(name) ? [full] : [];
         });
     const app = read("App.jsx");
-    const layout = read("components", "PeopleLayout.jsx");
+    const layout = read("layouts", "PeopleLayout.jsx");
 
     it("uses no legacy v5 router syntax anywhere in src", () => {
         const code = sources(srcDir).map((file) => readFileSync(file, "utf8")).join("\n");
@@ -121,11 +121,13 @@ describe("source guards", () => {
     it("declares nested routes with <Routes> and JSX element props", () => {
         expect(app).toMatch(/import\s*\{[^}]*\bRoutes\b[^}]*\bRoute\b[^}]*\}\s*from\s*"react-router"/);
         expect(app.match(/<Routes>/g)).toHaveLength(1);
-        expect(app.match(/<Route\s/g)).toHaveLength(4);
-        expect(app.match(/<Route\s[^{]*\belement=\{<\w+[^}]*\/>\}/g)).toHaveLength(4);
+        expect(app.match(/<Route\s/g)).toHaveLength(6);
+        expect(app.match(/<Route\s[^{]*\belement=\{<\w+(?:[^{}]|\{\w+\})*\/>\}/g)).toHaveLength(6);
         expect(app).toMatch(
-            /<Route path="\/people" element=\{<PeopleLayout \/>\}>\s*<Route index element=\{<PeopleDirectory \/>\} \/>\s*<Route path=":id" element=\{<PersonDetail \/>\} \/>\s*<\/Route>/
+            /<Route path="\/people" element=\{<PeopleLayout \/>\}>\s*<Route index element=\{<PeopleDirectory \/>\} \/>\s*<Route path=":id" element=\{<PersonDetail people=\{people\} \/>\} \/>\s*<Route path="\*" element=\{<NotFoundState \/>\} \/>\s*<\/Route>/
         );
+        // The people dataset comes from the single existing data module.
+        expect(app).toMatch(/import \{ people \} from "\.\/data\/people";/);
     });
 
     it("PeopleLayout uses Outlet + NavLink with a functional className and no local active state", () => {
@@ -142,7 +144,7 @@ describe("source guards", () => {
     });
 
     it("grid is minmax(280px, 1fr) 2fr and stacks at <= 640px", () => {
-        const css = read("components", "PeopleLayout.css");
+        const css = read("layouts", "PeopleLayout.css");
         expect(css).toMatch(/\.people-layout\s*\{[^}]*display: grid;[^}]*grid-template-columns: minmax\(280px, 1fr\) 2fr;/);
         expect(css).toMatch(/@media \(max-width: 640px\)\s*\{\s*\.people-layout\s*\{[^}]*grid-template-columns: 1fr;/);
     });

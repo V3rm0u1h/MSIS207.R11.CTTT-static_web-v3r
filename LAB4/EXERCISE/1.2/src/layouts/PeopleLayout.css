@@ -57,3 +57,29 @@
     }
     .people-content { padding: 1rem; }
 }
+
+/* ---- Dossier content (rendered through the Outlet) ---- */
+.people-content h2 { margin: 0 0 1rem; font-size: 1.5rem; line-height: 2rem; }
+.person-details {
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr);
+    gap: 0.5rem 1.25rem;
+    margin: 0;
+}
+.person-details dt { font-weight: 600; color: var(--color-muted); }
+.person-details dt::after { content: ":"; }
+.person-details dd { margin: 0; }
+.person-skills { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0; padding: 0; list-style: none; }
+.person-skills li {
+    padding: 0.125rem 0.625rem;
+    border: 1px solid var(--color-border);
+    border-radius: 999px;
+    font-size: 0.875rem;
+}
+.not-found p { margin: 0 0 1rem; }
+
+@media (max-width: 640px) {
+    /* Label above value on phones. */
+    .person-details { grid-template-columns: 1fr; gap: 0.125rem; }
+    .person-details dd + dt { margin-block-start: 0.75rem; }
+}
